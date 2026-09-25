@@ -4,13 +4,29 @@ declare(strict_types=1);
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
+date_default_timezone_set('UTC');
 
-const DATA_FILE  = __DIR__ . '/data/apps.json';
 const ICON_DIR   = __DIR__ . '/uploads/icons';
-// Admin login lives in config.php (git-ignored). Copy config.example.php to create it.
+// Admin login and database live in config.php (git-ignored). Copy config.example.php to create it.
 $config = is_file(__DIR__ . '/config.php') ? require __DIR__ . '/config.php' : [];
 define('ADMIN_USER', (string)($config['admin_user'] ?? ''));
 define('ADMIN_PASS', (string)($config['admin_pass'] ?? ''));
+// The same MySQL database the "ipa game site" repo uses (tables games, game_versions, game_screenshots).
+// Defaults are local XAMPP.
+define('DB', (array)($config['db'] ?? []) + ['host' => '127.0.0.1', 'name' => 'ipa_store', 'user' => 'root', 'pass' => '']);
+// Public URL of this site without trailing slash; empty = auto-detect. Uploaded icons are stored
+// as absolute URLs so the other site can show them too.
+define('SITE_URL', rtrim((string)($config['site_url'] ?? ''), '/'));
+
+// Store categories — offered in the admin panel even before any item uses them.
+const CATEGORIES = [
+    'games' => ['action', 'adventure', 'arcade', 'casual', 'puzzle', 'racing', 'role-playing', 'simulation', 'strategy',
+                'sports', 'board', 'card', 'casino', 'family', 'music', 'trivia', 'word'],
+    'apps'  => ['communication', 'entertainment', 'graphics-design', 'health-fitness', 'photo-video', 'productivity',
+                'utilities', 'education', 'music'],
+];
+// 'review' and 'removed' are set on the other site (rights check); only 'published' is public.
+const STATUSES = ['published', 'draft', 'review', 'removed'];
 
 class ApiError extends Exception {}
 
@@ -44,53 +60,168 @@ function body(): array
     return is_array($d) ? $d : [];
 }
 
-function default_data(): array
+function db(): PDO
 {
-    return ['meta' => ['version' => 1, 'updated_at' => '', 'total' => 0], 'categories' => ['games' => [], 'apps' => []], 'items' => []];
-}
-
-function read_data(): array
-{
-    if (!is_file(DATA_FILE)) return default_data();
-    $fp = fopen(DATA_FILE, 'r');
-    flock($fp, LOCK_SH);
-    $raw = stream_get_contents($fp);
-    flock($fp, LOCK_UN);
-    fclose($fp);
-    $d = json_decode($raw ?: '', true);
-    if (!is_array($d)) throw new ApiError('Data file is not valid JSON', 500);
-    $d['items'] = $d['items'] ?? [];
-    return $d;
-}
-
-// Read-modify-write the JSON file under an exclusive lock.
-function write_data(callable $fn)
-{
-    if (!is_dir(dirname(DATA_FILE))) mkdir(dirname(DATA_FILE), 0775, true);
-    $fp = fopen(DATA_FILE, 'c+');
-    if (!$fp) throw new ApiError('Cannot open data file', 500);
-    try {
-        flock($fp, LOCK_EX);
-        $raw = stream_get_contents($fp);
-        $d = trim((string)$raw) === '' ? default_data() : json_decode($raw, true);
-        if (!is_array($d)) throw new ApiError('Data file is not valid JSON', 500);
-        $d['items'] = $d['items'] ?? [];
-
-        $result = $fn($d);
-
-        $d['items'] = array_values($d['items']);
-        $d['meta']['total'] = count($d['items']);
-        $d['meta']['updated_at'] = gmdate('Y-m-d\TH:i:s\Z');
-        $json = json_encode($d, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        ftruncate($fp, 0);
-        rewind($fp);
-        fwrite($fp, $json . "\n");
-        fflush($fp);
-        return $result;
-    } finally {
-        flock($fp, LOCK_UN);
-        fclose($fp);
+    static $pdo;
+    if (!$pdo) {
+        $c = DB;
+        $pdo = new PDO("mysql:host={$c['host']};dbname={$c['name']};charset=utf8mb4", $c['user'], $c['pass'], [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
     }
+    return $pdo;
+}
+
+function site_url(): string
+{
+    if (SITE_URL !== '') return SITE_URL;
+    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
+    return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . str_replace(' ', '%20', $dir);
+}
+
+function iso_date(?string $dt): string
+{
+    return $dt ? gmdate('Y-m-d\TH:i:s\Z', strtotime($dt . ' UTC')) : '';
+}
+
+function sql_date(string $iso): string
+{
+    return gmdate('Y-m-d H:i:s', strtotime($iso) ?: time());
+}
+
+/** A games row (+ its versions and screenshots) in the apps.json item shape the front-end expects. */
+function row_to_item(array $r, array $versions = [], array $shots = []): array
+{
+    $csv = fn($s) => ($s ?? '') === '' ? [] : explode(',', $s);
+    $screens = fn($dev) => array_values(array_column(array_filter($shots, fn($s) => $s['device'] === $dev), 'url'));
+    return [
+        'id' => (int)$r['id'],
+        'type' => $r['type'] ?? 'game',
+        'slug' => $r['slug'] ?? '',
+        'name' => $r['name'] ?? '',
+        'category' => $r['category'] ?? '',
+        'developer' => $r['developer'] ?? '',
+        'bundle_id' => $r['bundle_id'] ?? null,
+        'app_store_id' => $r['app_store_id'] ?? null,
+        'app_store_url' => $r['app_store_url'] ?? null,
+        'price' => (float)($r['price'] ?? 0),
+        'icon' => $r['icon'] ?? '',
+        'screenshots' => $screens('iphone'),
+        'ipad_screenshots' => $screens('ipad'),
+        'min_ios' => $r['min_ios'] ?? '',
+        'compatible' => array_keys(array_filter(['iphone' => $r['is_iphone'] ?? 1, 'ipad' => $r['is_ipad'] ?? 0])),
+        'languages' => $csv($r['languages'] ?? ''),
+        'content_rating' => $r['content_rating'] ?? '',
+        'rating' => ['value' => (float)($r['rating_value'] ?? 0), 'count' => (int)($r['rating_count'] ?? 0)],
+        'short_description' => $r['short_description'] ?? '',
+        'description' => $r['description'] ?? '',
+        'tags' => $csv($r['tags'] ?? ''),
+        'featured' => ['popular' => !empty($r['is_popular']), 'editors_choice' => !empty($r['is_editors_choice'])],
+        'latest_version' => $r['latest_version'] ?? '',
+        'versions' => array_map(fn($v) => [
+            'version' => $v['version'],
+            'release_date' => $v['release_date'] ?? '',
+            'size_mb' => (float)$v['size_mb'] ?: null,
+            'changelog' => $v['changelog'] ?? '',
+            'download_url' => $v['download_url'],
+        ], $versions),
+        'seo' => ['title' => $r['seo_title'] ?? '', 'meta_description' => $r['seo_description'] ?? ''],
+        'license_type' => $r['license_type'] ?? 'app-store-link',
+        'status' => $r['status'] ?? 'published',
+        'created_at' => iso_date($r['created_at'] ?? null),
+        'updated_at' => iso_date($r['updated_at'] ?? null),
+    ];
+}
+
+function group_by_game(string $sql): array
+{
+    $out = [];
+    foreach (db()->query($sql) as $row) $out[$row['game_id']][] = $row;
+    return $out;
+}
+
+/** All items, newest first. $full adds descriptions, versions and screenshots (admin panel). */
+function fetch_items(bool $all, bool $full): array
+{
+    $cols = $full ? '*' : 'id, slug, type, name, developer, category, icon, short_description, latest_version,
+                          is_popular, is_editors_choice, tags, status, updated_at';
+    $where = $all ? '' : " WHERE status='published'";
+    $rows = db()->query("SELECT $cols FROM games$where ORDER BY updated_at DESC, id DESC")->fetchAll();
+    if (!$full) return array_map('row_to_item', $rows);
+    $vers = group_by_game('SELECT * FROM game_versions ORDER BY id');
+    $shots = group_by_game('SELECT game_id, device, url FROM game_screenshots ORDER BY sort, id');
+    return array_map(fn($r) => row_to_item($r, $vers[$r['id']] ?? [], $shots[$r['id']] ?? []), $rows);
+}
+
+// Old links use slugs ending in "-ipa"; the database stores them without it.
+function find_item(?int $id, ?string $slug): ?array
+{
+    if ($id !== null) {
+        $st = db()->prepare('SELECT * FROM games WHERE id=?');
+        $st->execute([$id]);
+    } elseif ($slug !== null && $slug !== '') {
+        $st = db()->prepare('SELECT * FROM games WHERE slug IN (?, ?) ORDER BY slug=? DESC LIMIT 1');
+        $st->execute([$slug, preg_replace('/-ipa$/', '', $slug), $slug]);
+    } else {
+        return null;
+    }
+    $r = $st->fetch();
+    if (!$r) return null;
+    $v = db()->prepare('SELECT * FROM game_versions WHERE game_id=? ORDER BY id');
+    $v->execute([$r['id']]);
+    $s = db()->prepare('SELECT device, url FROM game_screenshots WHERE game_id=? ORDER BY sort, id');
+    $s->execute([$r['id']]);
+    return row_to_item($r, $v->fetchAll(), $s->fetchAll());
+}
+
+/** Insert or update a cleaned item and replace its versions. Returns the item id. */
+function save_item(array $it, ?int $id): int
+{
+    $latest = $it['versions'][0];
+    // Rights layer (shared with the other site): links off the App Store need a human to confirm them.
+    $offStore = (bool)array_filter($it['versions'], fn($v) => !str_contains($v['download_url'], 'apps.apple.com'));
+    $license = $it['license_type'] ?? 'app-store-link';
+    if ($offStore && $license === 'app-store-link') $license = 'unverified';
+
+    $cols = [
+        'type' => $it['type'],
+        'name' => $it['name'],
+        'category' => $it['category'],
+        'developer' => $it['developer'],
+        'icon' => $it['icon'],
+        'short_description' => $it['short_description'],
+        'description' => $it['description'],
+        'min_ios' => $it['min_ios'],
+        'is_popular' => (int)$it['featured']['popular'],
+        'is_editors_choice' => (int)$it['featured']['editors_choice'],
+        'license_type' => $license,
+        'latest_version' => $it['latest_version'],
+        'latest_size_mb' => $latest['size_mb'] ?? 0,
+        'latest_release_date' => $latest['release_date'] ?: null,
+        'seo_title' => $it['seo']['title'],
+        'seo_description' => $it['seo']['meta_description'],
+        'status' => $it['status'],
+        'updated_at' => sql_date($it['updated_at']),
+    ];
+    if ($id === null) {
+        $cols += ['slug' => $it['slug'], 'created_at' => sql_date($it['created_at'])];
+        $sql = 'INSERT INTO games (' . implode(',', array_keys($cols)) . ') VALUES (' . rtrim(str_repeat('?,', count($cols)), ',') . ')';
+        db()->prepare($sql)->execute(array_values($cols));
+        $id = (int)db()->lastInsertId();
+    } else {
+        $sql = 'UPDATE games SET ' . implode(',', array_map(fn($c) => "$c=?", array_keys($cols))) . ' WHERE id=?';
+        db()->prepare($sql)->execute([...array_values($cols), $id]);
+    }
+
+    db()->prepare('DELETE FROM game_versions WHERE game_id=?')->execute([$id]);
+    $add = db()->prepare('INSERT INTO game_versions (game_id,version,release_date,size_mb,changelog,download_url) VALUES (?,?,?,?,?,?)');
+    foreach ($it['versions'] as $v) {
+        $add->execute([$id, $v['version'], $v['release_date'] ?: null, $v['size_mb'] ?? 0, $v['changelog'], $v['download_url']]);
+    }
+    return $id;
 }
 
 function str_in(array $in, string $key, int $max): string
@@ -112,12 +243,14 @@ function slugify(string $s): string
     return $s === '' ? 'item' : $s;
 }
 
-function unique_slug(string $base, array $items, ?int $selfId): string
+// The other site builds URLs as /ipa-games/{cat}/{slug}-ipa/, so slugs never end in "-ipa".
+function unique_slug(string $name): string
 {
+    $base = preg_replace('/-ipa$/', '', slugify($name)) ?: 'item';
+    $st = db()->prepare('SELECT 1 FROM games WHERE slug=?');
     $slug = $base;
     $n = 2;
-    $taken = fn($s) => (bool)array_filter($items, fn($i) => ($i['slug'] ?? '') === $s && (int)($i['id'] ?? 0) !== $selfId);
-    while ($taken($slug)) $slug = $base . '-' . $n++;
+    while ($st->execute([$slug]) && $st->fetchColumn()) $slug = $base . '-' . $n++;
     return $slug;
 }
 
@@ -136,7 +269,7 @@ function clean_item(array $in, ?array $existing): array
     $item['icon'] = clean_url(str_in($in, 'icon', 500), 'Icon');
     $item['short_description'] = str_in($in, 'short_description', 200);
     $item['description'] = str_in($in, 'description', 20000);
-    $item['min_ios'] = str_in($in, 'min_ios', 20);
+    $item['min_ios'] = str_in($in, 'min_ios', 16);
     $item['featured'] = [
         'popular' => !empty($in['popular']),
         'editors_choice' => !empty($in['editors_choice']),
@@ -167,24 +300,17 @@ function clean_item(array $in, ?array $existing): array
     $item['latest_version'] = $versions[0]['version'];
     $item['versions'] = $versions;
 
+    $ver = $item['latest_version'];
     $item['seo'] = [
-        'title' => "$name v{$item['latest_version']}",
+        'title' => $name . ' ' . (preg_match('/^v/i', $ver) ? $ver : "v$ver"),
         'meta_description' => $item['short_description'] !== '' ? $item['short_description'] : $name,
     ];
-    $item['status'] = in_array($in['status'] ?? '', ['published', 'draft'], true) ? $in['status'] : 'published';
+    $item['status'] = in_array($in['status'] ?? '', STATUSES, true) ? $in['status'] : 'published';
 
     $now = gmdate('Y-m-d\TH:i:s\Z');
-    $item['created_at'] = $item['created_at'] ?? $now;
+    $item['created_at'] = ($item['created_at'] ?? '') ?: $now;
     $item['updated_at'] = $now;
     return $item;
-}
-
-function find_item(array $items, ?int $id, ?string $slug): ?array
-{
-    foreach ($items as $i) {
-        if (($id !== null && (int)($i['id'] ?? 0) === $id) || ($slug !== null && ($i['slug'] ?? '') === $slug)) return $i;
-    }
-    return null;
 }
 
 function is_published(array $i): bool
@@ -212,12 +338,10 @@ function matches_filters(array $i, string $type, string $cat, string $q): bool
 try {
     switch ($_GET['action'] ?? '') {
         case 'list':
-            $d = read_data();
             $all = is_admin() && !empty($_GET['all']);
-            $items = array_values(array_filter($d['items'], fn($i) => $all || is_published($i)));
-            usort($items, fn($a, $b) => strcmp($b['updated_at'] ?? '', $a['updated_at'] ?? ''));
             // No page param: full list (admin panel).
-            if (!isset($_GET['page'])) respond(['items' => $items, 'categories' => $d['categories'] ?? new stdClass()]);
+            if (!isset($_GET['page'])) respond(['items' => fetch_items($all, true), 'categories' => CATEGORIES]);
+            $items = fetch_items($all, false);
 
             $type = (string)($_GET['type'] ?? '');
             $cat = (string)($_GET['category'] ?? '');
@@ -272,7 +396,7 @@ try {
         case 'get':
             $id = isset($_GET['id']) ? (int)$_GET['id'] : null;
             $slug = isset($_GET['slug']) ? (string)$_GET['slug'] : null;
-            $item = find_item(read_data()['items'], $id, $slug);
+            $item = find_item($id, $slug);
             if (!$item || (!is_published($item) && !is_admin())) throw new ApiError('Not found', 404);
             respond(['item' => $item]);
 
@@ -301,44 +425,36 @@ try {
             require_admin();
             $b = body();
             $id = isset($b['id']) && $b['id'] !== '' && $b['id'] !== null ? (int)$b['id'] : null;
-            $item = write_data(function (array &$d) use ($b, $id) {
+            $pdo = db();
+            $pdo->beginTransaction();
+            try {
                 if ($id === null) {
-                    $new = clean_item($b, null);
-                    $nextId = max(array_merge([0], array_map(fn($i) => (int)($i['id'] ?? 0), $d['items']))) + 1;
-                    $slug = unique_slug(slugify($new['name']), $d['items'], null);
-                    $new = ['id' => $nextId, 'type' => $new['type'], 'slug' => $slug] + $new;
-                    $d['items'][] = $new;
-                    return $new;
+                    $item = clean_item($b, null);
+                    $item['slug'] = unique_slug($item['name']);
+                } else {
+                    $item = clean_item($b, find_item($id, null) ?? throw new ApiError('Not found', 404));
                 }
-                foreach ($d['items'] as $k => $existing) {
-                    if ((int)($existing['id'] ?? 0) !== $id) continue;
-                    $u = clean_item($b, $existing);
-                    if (empty($u['slug'])) $u['slug'] = unique_slug(slugify($u['name']), $d['items'], $id);
-                    $d['items'][$k] = $u;
-                    return $u;
-                }
-                throw new ApiError('Not found', 404);
-            });
-            respond(['item' => $item]);
+                $id = save_item($item, $id);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
+            respond(['item' => find_item($id, null)]);
 
         case 'delete':
             require_post();
             require_admin();
             $id = (int)(body()['id'] ?? 0);
-            $removed = write_data(function (array &$d) use ($id) {
-                foreach ($d['items'] as $k => $i) {
-                    if ((int)($i['id'] ?? 0) === $id) {
-                        unset($d['items'][$k]);
-                        return $i;
-                    }
-                }
-                throw new ApiError('Not found', 404);
-            });
+            $removed = find_item($id, null) ?? throw new ApiError('Not found', 404);
+            // Versions and screenshots go with it (ON DELETE CASCADE).
+            db()->prepare('DELETE FROM games WHERE id=?')->execute([$id]);
             // Remove the uploaded icon if nothing else uses it.
-            $icon = ltrim((string)($removed['icon'] ?? ''), '/');
+            $icon = ltrim(str_replace(site_url() . '/', '', (string)$removed['icon']), '/');
             if (preg_match('~^uploads/icons/[\w-]+\.(png|jpe?g|webp|gif)$~', $icon)) {
-                $inUse = array_filter(read_data()['items'], fn($i) => ltrim((string)($i['icon'] ?? ''), '/') === $icon);
-                if (!$inUse) @unlink(__DIR__ . '/' . $icon);
+                $st = db()->prepare('SELECT COUNT(*) FROM games WHERE icon LIKE ?');
+                $st->execute(['%' . $icon]);
+                if (!$st->fetchColumn()) @unlink(__DIR__ . '/' . $icon);
             }
             respond(['ok' => true]);
 
@@ -355,7 +471,7 @@ try {
             if (!is_dir(ICON_DIR)) mkdir(ICON_DIR, 0775, true);
             $name = bin2hex(random_bytes(8)) . '.' . $ext;
             if (!move_uploaded_file($f['tmp_name'], ICON_DIR . '/' . $name)) throw new ApiError('Could not save icon', 500);
-            respond(['path' => 'uploads/icons/' . $name]);
+            respond(['path' => site_url() . '/uploads/icons/' . $name]);
 
         default:
             throw new ApiError('Unknown action', 400);
@@ -363,5 +479,6 @@ try {
 } catch (ApiError $e) {
     respond(['error' => $e->getMessage()], $e->getCode() ?: 400);
 } catch (Throwable $e) {
+    error_log('api.php: ' . $e->getMessage());
     respond(['error' => 'Server error'], 500);
 }
