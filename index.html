@@ -131,7 +131,7 @@
 
     function heroHTML(it) {
       const tag = it.featured?.editors_choice ? "Editors' Choice" : it.featured?.popular ? 'Popular Now' : 'New Update';
-      return `<a class="hero-card" id="heroCard" href="${link(it)}">
+      return `<a class="hero-card" href="${link(it)}" data-slug="${esc(it.slug)}">
         <div class="hero-top">
           <div class="hero-tag">${tag}</div>
           <h2>${esc(it.name)}</h2>
@@ -156,16 +156,20 @@
     }
 
     function todayHTML(r) {
-      const hero = r.featured?.[0] || r.items[0];
-      if (!hero) return '<p class="empty">No games yet.</p>';
-      const fresh = r.items.filter(i => i.id !== hero.id).slice(0, 6);
-      const picks = (r.featured || []).slice(1);
+      const heroes = heroPicks(r);
+      if (!heroes.length) return '<p class="empty">No games yet.</p>';
+      const isHero = i => heroes.some(h => h.id === i.id);
+      const fresh = r.items.filter(i => !isHero(i)).slice(0, 6);
+      const picks = (r.featured || []).filter(i => !isHero(i));
       const cats = Object.entries(r.facets?.category_counts || {});
       return `
         <header class="today-head">
           <h1>Today</h1>
         </header>
-        ${heroHTML(hero)}
+        <div class="hero-slider">
+          <div class="hero-track">${heroes.map(heroHTML).join('')}</div>
+          ${heroes.length > 1 ? `<div class="hero-dots">${heroes.map((h, i) => `<button type="button" aria-label="Show ${esc(h.name)}"${i ? '' : ' aria-current="true"'}></button>`).join('')}</div>` : ''}
+        </div>
         ${picks.length ? `<section class="shelf"><div class="shelf-head"><h2>Editors' Picks</h2></div>
           <div class="carousel">${picks.map(featureHTML).join('')}</div></section>` : ''}
         ${fresh.length ? `<section class="shelf"><div class="shelf-head"><h2>New &amp; Updated</h2></div>
@@ -177,21 +181,105 @@
         <a class="btn ghost block browse-all" href="./?type=game" data-tab-link="game">Browse all games</a>`;
     }
 
-    // Fill the hero banner with the game's first screenshot (list rows don't carry screenshots).
+    const HERO_COUNT = 4;                        // banners in the Today slider
+    const HERO_DELAY = 5000;                     // ms each banner stays before sliding on
+
+    // Featured games first, topped up with the newest ones.
+    function heroPicks(r) {
+      const list = (r.featured || []).slice(0, HERO_COUNT);
+      for (const i of r.items) {
+        if (list.length >= HERO_COUNT) break;
+        if (!list.some(h => h.id === i.id)) list.push(i);
+      }
+      return list;
+    }
+
+    // Endless Today banners: a copy of the last card sits before the first and a copy of the first
+    // after the last, so sliding past either end keeps going the same way; once the copy settles the
+    // track jumps silently to the real card. Auto-advances every HERO_DELAY; any swipe, wheel or dot
+    // tap restarts the countdown, and hovering (desktop) or a hidden tab pauses it.
+    let heroTimer;
+    function startHeroSlider() {
+      clearInterval(heroTimer);
+      const track = $('#today .hero-track');
+      const dots = [...document.querySelectorAll('#today .hero-dots button')];
+      const real = track ? [...track.children] : [];
+      const n = real.length;
+      if (n < 2) return;
+      const copy = card => {
+        const c = card.cloneNode(true);
+        c.setAttribute('aria-hidden', 'true');
+        c.tabIndex = -1;
+        return c;
+      };
+      track.prepend(copy(real[n - 1]));
+      track.append(copy(real[0]));
+      const cards = [...track.children];         // [last copy, 0 … n-1, first copy]
+      const step = () => cards[1].offsetLeft - cards[0].offsetLeft;
+      const pos = () => Math.round(track.scrollLeft / step());
+      const jump = p => { track.style.scrollSnapType = 'none'; track.scrollLeft = p * step(); track.style.scrollSnapType = ''; };
+      const go = p => track.scrollTo({ left: p * step(), behavior: 'smooth' });
+      jump(1);
+
+      let hover = false, settle;
+      const settled = () => {
+        const p = pos();
+        if (p === 0) jump(n);
+        else if (p === n + 1) jump(1);
+      };
+      track.addEventListener('scroll', () => {
+        const i = (pos() - 1 + n) % n;
+        dots.forEach((d, k) => d.toggleAttribute('aria-current', k === i));
+        clearTimeout(settle);
+        settle = setTimeout(settled, 120);      // no 'scrollend' in older Safari
+      }, { passive: true });
+
+      const restart = () => {
+        clearInterval(heroTimer);
+        heroTimer = setInterval(() => {
+          if (!track.isConnected) return clearInterval(heroTimer);
+          if (hover || document.hidden) return;
+          settled();                             // in case the last slide stopped on a copy
+          go(pos() + 1);
+        }, HERO_DELAY);
+      };
+      ['pointerdown', 'wheel', 'touchstart'].forEach(ev => track.addEventListener(ev, restart, { passive: true }));
+      track.addEventListener('mouseenter', () => { hover = true; });
+      track.addEventListener('mouseleave', () => { hover = false; });
+      dots.forEach((d, k) => d.addEventListener('click', () => { settled(); go(k + 1); restart(); }));
+      restart();
+    }
+
+    // Fill the hero banners (and their slider copies) with the game's first screenshot (list rows
+    // don't carry screenshots). Games without screenshots get their icon, big and centred over a
+    // blurred copy of itself.
     async function loadHeroImage(slug, id) {
       try {
         const { item } = await api('get', { params: { slug } });
-        const src = item.ipad_screenshots?.[0] || item.screenshots?.[0];
-        const card = $('#heroCard');
-        if (!src || id !== reqId || !card) return;
-        const img = new Image();
-        img.className = 'hero-img';
-        img.alt = '';
-        img.onload = () => card.classList.add('has-img');
-        // Fall back to the original size if the CDN won't resize this one.
-        img.onerror = () => { if (img.src !== asset(src)) img.src = asset(src); else img.remove(); };
-        img.src = asset(bigShot(src));
-        card.prepend(img);
+        const shot = item.ipad_screenshots?.[0] || item.screenshots?.[0];
+        const src = shot || item.icon;
+        if (!src || id !== reqId) return;
+        document.querySelectorAll(`#today .hero-card[data-slug="${CSS.escape(slug)}"]`).forEach(card => {
+          const img = new Image();
+          img.className = 'hero-img';
+          img.alt = '';
+          img.onload = () => card.classList.add('has-img');
+          if (shot) {
+            // Fall back to the original size if the CDN won't resize this one.
+            img.onerror = () => { if (img.src !== asset(shot)) img.src = asset(shot); else img.remove(); };
+            img.src = asset(bigShot(shot));
+          } else {
+            card.classList.add('icon-art');
+            img.onerror = () => { card.classList.remove('icon-art'); card.querySelectorAll('.hero-img, .hero-art').forEach(e => e.remove()); };
+            img.src = asset(src);
+            const art = new Image();
+            art.className = 'hero-art';
+            art.alt = '';
+            art.src = img.src;
+            card.prepend(art);
+          }
+          card.prepend(img);
+        });
       } catch { /* banner keeps its gradient background */ }
     }
 
@@ -272,7 +360,7 @@
       const id = ++reqId;
       const v = view();
       const home = v === 'today' || v === 'shelves';
-      const params = v === 'today' ? { page: 1, per_page: 7, shelves: SHELF_SIZE }
+      const params = v === 'today' ? { page: 1, per_page: 10, shelves: SHELF_SIZE }
         : v === 'shelves' ? { page: 1, per_page: 1, shelves: SHELF_SIZE }
         : { page: state.page, per_page: PER_PAGE };
       if (state.type) params.type = state.type;
@@ -293,8 +381,8 @@
         shown = key;
         if (v === 'today') {
           $('#today').innerHTML = todayHTML(r);
-          const hero = r.featured?.[0] || r.items[0];
-          if (hero) loadHeroImage(hero.slug, id);
+          startHeroSlider();
+          heroPicks(r).forEach(h => loadHeroImage(h.slug, id));
           if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
