@@ -1,0 +1,62 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: none
+
+      - name: PHP syntax check
+        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
+
+      - name: Validate apps.json
+        run: python3 -c "import json; json.load(open('data/apps.json', encoding='utf-8'))"
+
+  deploy:
+    name: Deploy via FTPS
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only uploads files that changed since the last deploy (tracked in
+      # .ftp-deploy-sync-state.json on the server). Server-only files such as
+      # config.php, admin/ and uploaded icons are never touched.
+      - name: Upload
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftp.rubiksacademy.live
+          port: 21
+          protocol: ftps
+          username: app@app.ipagame.store
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ./
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .github/**
+            .claude/**
+            scripts/**
+            config.example.php
+            **/*.bak
+            **/*.zip
+            *.mobileconfig
