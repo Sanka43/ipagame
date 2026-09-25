@@ -19,7 +19,13 @@ async function api(action, opts = {}) {
 
   const res = await fetch(url, init);
   let data;
-  try { data = await res.json(); } catch { throw new Error(`Server error (${res.status})`); }
+  try {
+    data = await res.json();
+  } catch {
+    // No PHP (e.g. GitHub Pages): serve read-only actions straight from the JSON file.
+    if (init.method === 'GET' && action in staticApi) return staticApi[action](opts.params || {});
+    throw new Error(`Server error (${res.status})`);
+  }
   if (!res.ok || data.error) {
     const err = new Error(data.error || 'Request failed');
     err.status = res.status;
@@ -27,6 +33,37 @@ async function api(action, opts = {}) {
   }
   return data;
 }
+
+// Static-hosting fallback mirroring api.php's public 'list' and 'get' actions.
+let staticData;
+async function loadStaticData() {
+  if (!staticData) {
+    const res = await fetch(new URL(BASE + 'data/apps.json', location.href));
+    if (!res.ok) throw new Error(`Could not load data (${res.status})`);
+    staticData = await res.json();
+  }
+  return staticData;
+}
+
+const isPublished = i => (i.status || 'published') === 'published';
+
+const staticApi = {
+  async list() {
+    const d = await loadStaticData();
+    const items = (d.items || []).filter(isPublished)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+    return { items, categories: d.categories || {} };
+  },
+  async get(params) {
+    const d = await loadStaticData();
+    const item = (d.items || []).find(i =>
+      (params.id != null && String(i.id) === String(params.id)) ||
+      (params.slug != null && i.slug === params.slug));
+    if (!item || !isPublished(item)) { const e = new Error('Not found'); e.status = 404; throw e; }
+    return { item };
+  },
+  async me() { return { admin: false }; },
+};
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

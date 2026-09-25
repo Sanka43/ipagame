@@ -7,6 +7,13 @@
       "runtimeArgs": ["/c", "C:\\xampp\\php\\php.exe -S 127.0.0.1:%PORT% -t ."],
       "port": 8099,
       "autoPort": true
+    },
+    {
+      "name": "static",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "python -m http.server %PORT% --bind 127.0.0.1"],
+      "port": 8098,
+      "autoPort": true
     }
   ]
 }
