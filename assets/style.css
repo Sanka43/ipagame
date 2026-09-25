@@ -59,7 +59,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: grid; place-items: center;
 }
 
-/* ---------- Search & chips ---------- */
+/* ---------- Search ---------- */
 .search { position: relative; display: block; margin: 16px 0 12px; }
 .search input {
   width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--border);
@@ -71,14 +71,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
-.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; margin: 0 -16px; padding-inline: 16px; }
-.chips::-webkit-scrollbar { display: none; }
-.chip {
-  flex: none; height: 34px; padding: 0 14px; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--border); background: var(--surface);
-  font-size: 14px; font-weight: 500; white-space: nowrap;
-}
-.chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 
 .section-title {
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
@@ -302,8 +294,8 @@ dialog.sheet form { display: flex; flex-direction: column; height: 100%; }
 
 /* ---------- Today (Home tab) ---------- */
 .today-head { margin: 18px 0 14px; }
-.today-date { font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-.today-head h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+.today-head h1, .page-title { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+.page-title { margin-top: 18px; }
 
 .hero-card {
   position: relative; display: block; overflow: hidden; isolation: isolate;
@@ -358,12 +350,42 @@ dialog.sheet form { display: flex; flex-direction: column; height: 100%; }
 .cat-tile .n { flex: none; color: var(--muted); font-size: 13px; font-weight: 500; }
 .browse-all { margin-top: 28px; }
 
+/* ---------- Search: category cards ---------- */
+#browse { margin-top: 24px; }
+.cat-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 640px) { .cat-cards { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1000px) { .cat-cards { grid-template-columns: repeat(4, 1fr); } }
+.cat-card {
+  position: relative; overflow: hidden; height: 96px; padding: 12px 14px;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  border: 0; border-radius: 18px; cursor: pointer; text-align: left; color: #fff;
+  background: linear-gradient(135deg, var(--c1), var(--c2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  transition: transform .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cat-card:active { transform: scale(.96); }
+.cc-emoji {
+  position: absolute; top: -4px; right: -6px; font-size: 52px; line-height: 1;
+  transform: rotate(14deg); filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .3));
+}
+.cc-name { position: relative; font-weight: 800; font-size: 16px; line-height: 1.2; text-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
+.cc-n { position: relative; font-size: 12px; font-weight: 600; opacity: .85; }
+
+.section-title .lt { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.clear-cat {
+  flex: none; width: 26px; height: 26px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 700;
+  display: inline-grid; place-items: center;
+}
+.clear-cat:hover { color: var(--text); }
+
 /* ---------- Bottom tab bar (floating "liquid glass" capsule) ---------- */
 :root { --glass: rgba(255, 255, 255, .62); --glass-edge: rgba(255, 255, 255, .7); --glass-pill: rgba(0, 0, 0, .07); --tab-ink: #1c1c1e; }
 @media (prefers-color-scheme: dark) {
   :root { --glass: rgba(60, 60, 67, .5); --glass-edge: rgba(255, 255, 255, .16); --glass-pill: rgba(255, 255, 255, .13); --tab-ink: #f5f5f7; }
 }
-body:has(.tabbar) { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+body:has(.tabbar) { padding-top: env(safe-area-inset-top); padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 .tabbar {
   position: fixed; z-index: 20; left: 50%; transform: translateX(-50%);
   bottom: calc(10px + env(safe-area-inset-bottom));

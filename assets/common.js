@@ -135,6 +135,17 @@ const CAT_ICONS = {
 };
 const catIcon = c => CAT_ICONS[c] || '🎮';
 
+// Gradient pair per category for the Search page cards (dark enough for white text).
+const CAT_COLORS = {
+  action: ['#e11d48', '#f97316'], adventure: ['#059669', '#0284c7'], arcade: ['#7c3aed', '#db2777'],
+  casual: ['#db2777', '#f43f5e'], puzzle: ['#16a34a', '#65a30d'], racing: ['#dc2626', '#ea580c'],
+  'role-playing': ['#6d28d9', '#4338ca'], simulation: ['#d97706', '#b45309'], strategy: ['#0284c7', '#4f46e5'],
+  sports: ['#15803d', '#0f766e'], board: ['#92400e', '#c2410c'], card: ['#be123c', '#7e22ce'],
+  casino: ['#991b1b', '#d97706'], family: ['#0891b2', '#2563eb'], music: ['#c026d3', '#7c3aed'],
+  trivia: ['#1d4ed8', '#0891b2'], word: ['#4338ca', '#0e7490'],
+};
+const catColors = c => CAT_COLORS[c] || ['#475569', '#1e293b'];
+
 // Bottom tab bar shared by the store pages. `active` is one of the TABS keys (or '' for none).
 const TABS = [
   ['home', 'Home', './', '<path fill="currentColor" fill-rule="evenodd" d="M7.5 2h9A3.5 3.5 0 0 1 20 5.5v13a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 18.5v-13A3.5 3.5 0 0 1 7.5 2zM8.2 5.8a1 1 0 0 0-1 1v5.4a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V6.8a1 1 0 0 0-1-1zM8.1 15.8a.9.9 0 0 0 0 1.8h7.8a.9.9 0 0 0 0-1.8z"/>'],
