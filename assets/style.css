@@ -79,18 +79,47 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .section-title small { font-size: 13px; color: var(--muted); font-weight: 500; }
 
 /* ---------- Icons ---------- */
+/* Until the artwork loads (or when there is none) the tile shows a faint store-logo watermark;
+   .wait adds a shimmer while the image is still loading, .ok fades the image in. */
 .icon {
   position: relative; flex: none; overflow: hidden;
   width: 64px; height: 64px; border-radius: 22%;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  display: grid; place-items: center; font-size: 26px;
+  background: var(--surface-2);
   box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .15);
 }
-.icon::before { content: attr(data-l); color: #fff; font-weight: 700; }
-.icon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.icon.sm { width: 48px; height: 48px; font-size: 20px; }
-.icon.lg { width: 112px; height: 112px; font-size: 46px; }
-@media (min-width: 640px) { .icon.lg { width: 136px; height: 136px; font-size: 56px; } }
+.icon::before {
+  content: ""; position: absolute; inset: 16%;
+  background: url(icons/logo-mark.png) center / contain no-repeat;
+  opacity: .28; filter: grayscale(.5);
+}
+.icon.ok::before { display: none; }
+.icon.wait::after { content: ""; position: absolute; inset: 0; }
+.icon img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s; }
+.icon.ok img { opacity: 1; }
+.icon.sm { width: 48px; height: 48px; }
+.icon.lg { width: 112px; height: 112px; }
+@media (min-width: 640px) { .icon.lg { width: 136px; height: 136px; } }
+
+/* ---------- Skeleton loading ---------- */
+:root { --shine: rgba(255, 255, 255, .6); }
+@media (prefers-color-scheme: dark) { :root { --shine: rgba(255, 255, 255, .07); } }
+@keyframes shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.skel, .icon.wait::after {
+  background-image: linear-gradient(100deg, transparent 30%, var(--shine) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+.skel { display: block; background-color: var(--surface-2); border-radius: 8px; }
+.skel-line { height: 12px; margin: 7px 0; border-radius: 6px; }
+.skel-card { pointer-events: none; }
+.skel-card .skel.get { width: 68px; background-color: var(--surface-2); }
+.hero-card.skel, .cat-card.skel {
+  background: var(--surface-2) linear-gradient(100deg, transparent 30%, var(--shine) 50%, transparent 70%) 0 0 / 200% 100%;
+  animation: shimmer 1.4s linear infinite; box-shadow: none; cursor: default;
+}
+.hero-card.skel::after { display: none; }
+.stats .skel-line { margin: 5px auto; }
+@media (prefers-reduced-motion: reduce) { .skel, .skel.hero-card, .skel.cat-card, .icon.wait::after { animation: none; } }
 
 /* ---------- List rows ---------- */
 .list { display: grid; grid-template-columns: 1fr; column-gap: 28px; }

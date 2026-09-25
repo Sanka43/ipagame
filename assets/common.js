@@ -116,12 +116,30 @@ function asset(p) {
   return BASE + p;
 }
 
-// Icon with a letter fallback if the image is missing or fails to load.
+// Icon tile: shimmers over the store-logo watermark while loading, keeps the watermark if the image is missing or fails.
 function iconHTML(item, cls = '') {
-  const letter = esc((item.name || '?').trim().charAt(0).toUpperCase());
   const src = asset(item.icon);
-  const img = src ? `<img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()">` : '';
-  return `<div class="icon ${cls}" data-l="${letter}">${img}</div>`;
+  if (!src) return `<div class="icon ${cls}"></div>`;
+  return `<div class="icon wait ${cls}"><img src="${esc(src)}" alt="" loading="lazy"
+    onload="this.parentNode.classList.replace('wait','ok')" onerror="this.parentNode.classList.remove('wait');this.remove()"></div>`;
+}
+
+// Skeleton placeholders shown while data loads.
+const skelLine = (w, h) => `<span class="skel skel-line" style="width:${w}${h ? `;height:${h}px` : ''}"></span>`;
+
+function skelCardsHTML(n) {
+  return `<div class="app-card skel-card" aria-hidden="true">
+      <div class="icon wait"></div>
+      <div class="row-info">${skelLine('55%', 15)}${skelLine('22%')}${skelLine('75%')}</div>
+      <span class="get skel"></span>
+    </div>`.repeat(n);
+}
+
+function skelShelfHTML() {
+  return `<section class="shelf" aria-hidden="true">
+      <div class="shelf-head">${skelLine('150px', 22)}</div>
+      <div class="shelf-track" style="--rows:3">${skelCardsHTML(6)}</div>
+    </section>`;
 }
 
 function catLabel(c) {

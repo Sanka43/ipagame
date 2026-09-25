@@ -31,7 +31,7 @@
         <span class="lt"><span id="listTitle">All</span><button type="button" class="clear-cat" id="clearCat" aria-label="Clear category" hidden>✕</button></span>
         <small id="count"></small>
       </h2>
-      <div class="list" id="list"><p class="empty">Loading…</p></div>
+      <div class="list" id="list"></div>
       <nav class="pager" id="pager" aria-label="Pagination"></nav>
     </section>
   </main>
@@ -73,7 +73,9 @@
 
     // Search tab "Browse Categories" grid: two colour cards per row on phones.
     function browseHTML() {
-      const counts = Object.entries(state.facets?.category_counts || {});
+      if (!state.facets) return `<div class="shelf-head">${skelLine('200px', 22)}</div>
+        <div class="cat-cards" aria-hidden="true">${'<span class="cat-card skel"></span>'.repeat(8)}</div>`;
+      const counts = Object.entries(state.facets.category_counts || {});
       if (!counts.length) return '';
       const cards = counts.map(([c, n]) => {
         const [c1, c2] = catColors(c);
@@ -221,6 +223,12 @@
       return html;
     }
 
+    function todaySkelHTML() {
+      return `<header class="today-head"><h1>Today</h1></header>
+        <div class="hero-card skel" aria-hidden="true"></div>
+        ${skelShelfHTML()}`;
+    }
+
     // Views: Home tab = 'today'; Games/Apps tabs = category 'shelves'; a category or search = paged 'list'.
     const view = () => state.search ? 'search' : state.cat ? 'list' : state.type ? 'shelves' : 'today';
     const activeTab = () => state.search ? 'search' : state.type || 'home';
@@ -244,6 +252,21 @@
       $('#listTitle').textContent = (v === 'search' && state.cat ? catIcon(state.cat) + ' ' : '') + listTitle();
     }
 
+    // Which view (tab + type + category) is currently on screen with real data. Switching to a
+    // different one shows a skeleton; paging or typing a search within it just dims the old results.
+    let shown = '';
+    const viewKey = v => [v, state.type, state.cat].join('|');
+
+    function showSkeleton(v) {
+      if (v === 'today') $('#today').innerHTML = todaySkelHTML();
+      else if (v === 'shelves') $('#shelves').innerHTML = skelShelfHTML().repeat(2);
+      else {
+        $('#list').innerHTML = skelCardsHTML(9);
+        $('#count').textContent = '';
+        $('#pager').innerHTML = '';
+      }
+    }
+
     let reqId = 0;
     async function load({ push = false, scroll = false } = {}) {
       const id = ++reqId;
@@ -257,7 +280,9 @@
       if (state.q) params.q = state.q;
 
       renderChrome();
-      $('#list').classList.add('loading');
+      const key = viewKey(v);
+      if (key !== shown) { shown = ''; showSkeleton(v); }
+      else $('#list').classList.add('loading');
       try {
         const r = await api('list', { params });
         if (id !== reqId) return;               // a newer request replaced this one
@@ -265,6 +290,7 @@
         if (!home) state.page = r.page;
         writeUrl(push);
         renderChrome();
+        shown = key;
         if (v === 'today') {
           $('#today').innerHTML = todayHTML(r);
           const hero = r.featured?.[0] || r.items[0];
@@ -288,8 +314,11 @@
         if (scroll) $('#listTitle').closest('section').scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (err) {
         if (id !== reqId) return;
-        $('#list').innerHTML = `<p class="empty">Could not load games: ${esc(err.message)}</p>`;
-        $('#pager').innerHTML = '';
+        shown = '';
+        const msg = `<p class="empty">Could not load games: ${esc(err.message)}</p>`;
+        if (v === 'today') $('#today').innerHTML = msg;
+        else if (v === 'shelves') $('#shelves').innerHTML = msg;
+        else { $('#list').innerHTML = msg; $('#pager').innerHTML = ''; }
       } finally {
         if (id === reqId) $('#list').classList.remove('loading');
       }
