@@ -3,3 +3,4 @@ __pycache__/
 *.bak
 scripts/
 admin/
+config.php

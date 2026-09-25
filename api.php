@@ -7,8 +7,10 @@ header('X-Content-Type-Options: nosniff');
 
 const DATA_FILE  = __DIR__ . '/data/apps.json';
 const ICON_DIR   = __DIR__ . '/uploads/icons';
-const ADMIN_USER = 'admin';
-const ADMIN_PASS = 'admin';
+// Admin login lives in config.php (git-ignored). Copy config.example.php to create it.
+$config = is_file(__DIR__ . '/config.php') ? require __DIR__ . '/config.php' : [];
+define('ADMIN_USER', (string)($config['admin_user'] ?? ''));
+define('ADMIN_PASS', (string)($config['admin_pass'] ?? ''));
 
 class ApiError extends Exception {}
 
@@ -212,6 +214,7 @@ try {
         case 'login':
             require_post();
             $b = body();
+            if (ADMIN_PASS === '') throw new ApiError('Admin login not configured (create config.php)', 500);
             $okUser = hash_equals(ADMIN_USER, (string)($b['username'] ?? ''));
             $okPass = hash_equals(ADMIN_PASS, (string)($b['password'] ?? ''));
             if (!$okUser || !$okPass) throw new ApiError('Wrong username or password', 401);
