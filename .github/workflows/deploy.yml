@@ -40,7 +40,7 @@ jobs:
 
       # Only uploads files that changed since the last deploy (tracked in
       # .ftp-deploy-sync-state.json on the server). Server-only files such as
-      # config.php, admin/ and uploaded icons are never touched. Live data is in
+      # config.php and uploaded icons are never touched. Live data is in
       # MySQL; data/apps.json is only a seed/static snapshot and is not uploaded.
       - name: Upload
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

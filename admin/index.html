@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Store Admin</title>
+  <link rel="icon" href="../assets/icons/favicon.ico" sizes="any">
+  <link rel="icon" href="../assets/icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <!-- Login -->
+  <section class="login-wrap" id="loginView" hidden>
+    <form class="card login-card" id="loginForm">
+      <span class="brand-mark" style="width:44px;height:44px;border-radius:12px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </span>
+      <h1>Admin login</h1>
+      <p class="muted" style="margin:0 0 18px">Manage games in the store.</p>
+      <div class="field">
+        <label class="label" for="username">Username</label>
+        <input class="input" id="username" name="username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label class="label" for="password">Password</label>
+        <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <p class="error" id="loginError"></p>
+      <button class="btn block" type="submit">Log in</button>
+    </form>
+  </section>
+
+  <!-- Dashboard -->
+  <div id="dashView" hidden>
+    <header class="topbar">
+      <div class="wrap">
+        <span class="brand"><span class="brand-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/></svg>
+        </span>Admin</span>
+        <span class="spacer"></span>
+        <a class="btn sm ghost" href="../" target="_blank">View store</a>
+        <button class="btn sm ghost" id="logoutBtn">Log out</button>
+      </div>
+    </header>
+
+    <main class="wrap" style="padding-bottom:40px">
+      <div class="stat-cards" id="stats"></div>
+
+      <div class="toolbar">
+        <label class="search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Search" autocomplete="off" aria-label="Search">
+        </label>
+        <button class="btn" id="addBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add
+        </button>
+      </div>
+
+      <div class="admin-list" id="list">
+        <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
+        <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
+        <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
+        <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
+        <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add / edit sheet -->
+  <dialog class="sheet" id="editor">
+    <form id="editForm" novalidate>
+      <div class="sheet-head">
+        <h2 id="editorTitle">Add game</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="sheet-body">
+        <input type="hidden" name="id">
+
+        <div class="icon-picker field">
+          <div id="iconPreview"></div>
+          <div class="field">
+            <label class="label" for="f-icon">Icon (URL or upload)</label>
+            <input class="input" id="f-icon" name="icon" placeholder="https://… or uploads/icons/…">
+            <div>
+              <label class="btn sm ghost" style="cursor:pointer">
+                Upload image
+                <input type="file" id="iconFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="label" for="f-name">Name *</label>
+          <input class="input" id="f-name" name="name" required maxlength="120">
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="f-type">Type</label>
+            <select class="input" id="f-type" name="type">
+              <option value="game">Game</option>
+              <option value="app">App</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="f-category">Category</label>
+            <input class="input" id="f-category" name="category" list="categoryList" placeholder="e.g. arcade">
+            <datalist id="categoryList"></datalist>
+          </div>
+          <div class="field">
+            <label class="label" for="f-developer">Developer</label>
+            <input class="input" id="f-developer" name="developer" maxlength="120">
+          </div>
+          <div class="field">
+            <label class="label" for="f-min">Minimum iOS</label>
+            <input class="input" id="f-min" name="min_ios" placeholder="e.g. 14.0" maxlength="20">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="label" for="f-short">Short description</label>
+          <input class="input" id="f-short" name="short_description" maxlength="200" placeholder="One line shown on cards">
+        </div>
+        <div class="field">
+          <label class="label" for="f-desc">Description</label>
+          <textarea class="input" id="f-desc" name="description" rows="5"></textarea>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="f-status">Status</label>
+            <select class="input" id="f-status" name="status">
+              <option value="published">Published</option>
+              <option value="draft">Draft (hidden)</option>
+              <option value="review">Review (hidden)</option>
+              <option value="removed">Removed (hidden)</option>
+            </select>
+          </div>
+        </div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" name="popular"> Popular</label>
+          <label class="check"><input type="checkbox" name="editors_choice"> Editors' choice</label>
+        </div>
+
+        <h3>Versions <button type="button" class="btn sm ghost" id="addVersionBtn">+ Add version</button></h3>
+        <div id="versions"></div>
+      </div>
+
+      <div class="sheet-foot">
+        <p class="error" id="editError" style="flex:1;margin:0"></p>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn" id="saveBtn">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>window.API_BASE = '../';</script>
+  <script src="../assets/common.js"></script>
+  <script>
+    const $ = s => document.querySelector(s);
+    const form = $('#editForm');
+    const dialog = $('#editor');
+    let items = [];
+
+    /* ---------- Auth ---------- */
+    function showLogin() {
+      $('#dashView').hidden = true;
+      $('#loginView').hidden = false;
+      $('#username').focus();
+    }
+
+    async function showDash() {
+      $('#loginView').hidden = true;
+      $('#dashView').hidden = false;
+      await refresh();
+    }
+
+    function handleError(err) {
+      if (err.status === 401) { showLogin(); return; }
+      toast(err.message, true);
+    }
+
+    $('#loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = e.submitter;
+      btn.disabled = true;
+      $('#loginError').textContent = '';
+      try {
+        await api('login', { body: { username: $('#username').value, password: $('#password').value } });
+        $('#loginForm').reset();
+        await showDash();
+      } catch (err) {
+        $('#loginError').textContent = err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $('#logoutBtn').addEventListener('click', async () => {
+      try { await api('logout', { body: {} }); } catch {}
+      showLogin();
+    });
+
+    /* ---------- List ---------- */
+    async function refresh() {
+      try {
+        const r = await api('list', { params: { all: 1 } });
+        items = r.items;
+        const cats = new Set([...Object.values(r.categories || {}).flat(), ...items.map(i => i.category).filter(Boolean)]);
+        $('#categoryList').innerHTML = [...cats].sort().map(c => `<option value="${esc(c)}">`).join('');
+        render();
+      } catch (err) { handleError(err); }
+    }
+
+    function render() {
+      const count = f => items.filter(f).length;
+      $('#stats').innerHTML = [
+        ['Total', items.length],
+        ['Games', count(i => i.type === 'game')],
+        ['Apps', count(i => i.type === 'app')],
+        ['Drafts', count(i => i.status === 'draft')],
+      ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
+
+      const q = $('#q').value.trim().toLowerCase();
+      const list = items.filter(i => !q || [i.name, i.developer, i.category].join(' ').toLowerCase().includes(q));
+      $('#list').innerHTML = list.length ? list.map(it => {
+        const n = it.versions?.length || 0;
+        const meta = [it.type === 'app' ? 'App' : 'Game', catLabel(it.category), it.latest_version && 'v' + it.latest_version, `${n} version${n === 1 ? '' : 's'}`]
+          .filter(Boolean).join(' · ');
+        return `<div class="row">
+          ${iconHTML(it, 'sm')}
+          <div class="row-info">
+            <div class="row-name">${esc(it.name)} ${it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''}</div>
+            <div class="row-sub">${esc(meta)}</div>
+          </div>
+          <div class="row-actions">
+            <button class="btn sm ghost" data-edit="${it.id}">Edit</button>
+            <button class="btn sm danger" data-del="${it.id}">Delete</button>
+          </div>
+        </div>`;
+      }).join('') : `<p class="empty">${items.length ? 'No matches.' : 'No games yet. Tap “Add” to create one.'}</p>`;
+    }
+
+    $('#q').addEventListener('input', render);
+
+    $('#list').addEventListener('click', async e => {
+      const edit = e.target.closest('[data-edit]');
+      const del = e.target.closest('[data-del]');
+      if (edit) openEditor(items.find(i => String(i.id) === edit.dataset.edit));
+      if (del) {
+        const it = items.find(i => String(i.id) === del.dataset.del);
+        if (!it || !confirm(`Delete "${it.name}"? This cannot be undone.`)) return;
+        try {
+          await api('delete', { body: { id: it.id } });
+          toast('Deleted');
+          await refresh();
+        } catch (err) { handleError(err); }
+      }
+    });
+
+    /* ---------- Editor ---------- */
+    function updateIconPreview() {
+      $('#iconPreview').innerHTML = iconHTML({ name: form.name.value || '?', icon: form.icon.value.trim() });
+    }
+
+    function addVersion(v = {}) {
+      const box = document.createElement('div');
+      box.className = 'card ver-edit';
+      box.innerHTML = `
+        <div class="ver-top"><span>Version</span>
+          <button type="button" class="btn sm danger" data-remove>Remove</button></div>
+        <div class="grid2">
+          <div class="field"><label class="label">Version number *</label>
+            <input class="input" data-k="version" value="${esc(v.version)}" placeholder="1.0.0"></div>
+          <div class="field"><label class="label">Release date</label>
+            <input class="input" type="date" data-k="release_date" value="${esc(v.release_date)}"></div>
+          <div class="field"><label class="label">Size (MB)</label>
+            <input class="input" type="number" min="0" step="0.1" data-k="size_mb" value="${esc(v.size_mb)}"></div>
+        </div>
+        <div class="field"><label class="label">Download URL *</label>
+          <input class="input" data-k="download_url" value="${esc(v.download_url)}" placeholder="https://…/game.ipa"></div>
+        <div class="field" style="margin:0"><label class="label">What's new</label>
+          <textarea class="input" rows="2" data-k="changelog">${esc(v.changelog)}</textarea></div>`;
+      box.querySelector('[data-remove]').addEventListener('click', () => box.remove());
+      $('#versions').append(box);
+      return box;
+    }
+
+    function openEditor(it) {
+      form.reset();
+      $('#editError').textContent = '';
+      $('#versions').innerHTML = '';
+      $('#editorTitle').textContent = it ? 'Edit ' + it.name : 'Add game';
+
+      const f = form.elements;
+      f.id.value = it?.id ?? '';
+      f.name.value = it?.name ?? '';
+      f.type.value = it?.type ?? 'game';
+      f.category.value = it?.category ?? '';
+      f.developer.value = it?.developer ?? '';
+      f.min_ios.value = it?.min_ios ?? '';
+      f.icon.value = it?.icon ?? '';
+      f.short_description.value = it?.short_description ?? '';
+      f.description.value = it?.description ?? '';
+      f.status.value = it?.status ?? 'published';
+      f.popular.checked = !!it?.featured?.popular;
+      f.editors_choice.checked = !!it?.featured?.editors_choice;
+
+      (it?.versions?.length ? it.versions : [{ release_date: new Date().toISOString().slice(0, 10) }]).forEach(addVersion);
+      updateIconPreview();
+      dialog.showModal();
+      $('.sheet-body').scrollTop = 0;
+    }
+
+    function collect() {
+      const f = form.elements;
+      return {
+        id: f.id.value || null,
+        name: f.name.value,
+        type: f.type.value,
+        category: f.category.value,
+        developer: f.developer.value,
+        min_ios: f.min_ios.value,
+        icon: f.icon.value.trim(),
+        short_description: f.short_description.value,
+        description: f.description.value,
+        status: f.status.value,
+        popular: f.popular.checked,
+        editors_choice: f.editors_choice.checked,
+        versions: [...document.querySelectorAll('#versions .ver-edit')].map(box => {
+          const v = {};
+          box.querySelectorAll('[data-k]').forEach(i => { v[i.dataset.k] = i.value.trim(); });
+          return v;
+        }),
+      };
+    }
+
+    $('#addBtn').addEventListener('click', () => openEditor(null));
+    $('#addVersionBtn').addEventListener('click', () => {
+      const box = addVersion({ release_date: new Date().toISOString().slice(0, 10) });
+      $('#versions').prepend(box);
+      box.querySelector('[data-k="version"]').focus();
+    });
+    dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => dialog.close()));
+    form.icon.addEventListener('input', updateIconPreview);
+    form.name.addEventListener('input', updateIconPreview);
+
+    $('#iconFile').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('icon', file);
+      try {
+        const r = await api('upload_icon', { form: fd });
+        form.icon.value = r.path;
+        updateIconPreview();
+        toast('Icon uploaded');
+      } catch (err) { handleError(err); }
+    });
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('#saveBtn');
+      btn.disabled = true;
+      $('#editError').textContent = '';
+      try {
+        const data = collect();
+        await api('save', { body: data });
+        dialog.close();
+        toast(data.id ? 'Saved' : 'Added');
+        await refresh();
+      } catch (err) {
+        if (err.status === 401) { dialog.close(); showLogin(); }
+        else $('#editError').textContent = err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    /* ---------- Boot ---------- */
+    api('me').then(r => r.admin ? showDash() : showLogin()).catch(showLogin);
+  </script>
+</body>
+</html>

@@ -2,6 +2,5 @@ __pycache__/
 *.pyc
 *.bak
 scripts/
-admin/
 config.php
 *.zip
