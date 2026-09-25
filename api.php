@@ -192,6 +192,23 @@ function is_published(array $i): bool
     return ($i['status'] ?? 'published') === 'published';
 }
 
+// Fields the store list needs — keeps paged responses small.
+const LIST_FIELDS = ['id', 'slug', 'type', 'name', 'developer', 'category', 'icon', 'short_description', 'latest_version', 'featured'];
+
+function list_row(array $i): array
+{
+    return array_intersect_key($i, array_flip(LIST_FIELDS));
+}
+
+function matches_filters(array $i, string $type, string $cat, string $q): bool
+{
+    if ($type !== '' && ($i['type'] ?? '') !== $type) return false;
+    if ($cat !== '' && ($i['category'] ?? '') !== $cat) return false;
+    if ($q === '') return true;
+    $hay = implode(' ', [$i['name'] ?? '', $i['developer'] ?? '', $i['category'] ?? '', $i['short_description'] ?? '', ...(array)($i['tags'] ?? [])]);
+    return str_contains(mb_strtolower($hay), $q);
+}
+
 try {
     switch ($_GET['action'] ?? '') {
         case 'list':
@@ -199,7 +216,58 @@ try {
             $all = is_admin() && !empty($_GET['all']);
             $items = array_values(array_filter($d['items'], fn($i) => $all || is_published($i)));
             usort($items, fn($a, $b) => strcmp($b['updated_at'] ?? '', $a['updated_at'] ?? ''));
-            respond(['items' => $items, 'categories' => $d['categories'] ?? new stdClass()]);
+            // No page param: full list (admin panel).
+            if (!isset($_GET['page'])) respond(['items' => $items, 'categories' => $d['categories'] ?? new stdClass()]);
+
+            $type = (string)($_GET['type'] ?? '');
+            $cat = (string)($_GET['category'] ?? '');
+            $q = mb_strtolower(trim((string)($_GET['q'] ?? '')));
+            $facets = ['types' => [], 'categories' => []];
+            $counts = [];
+            foreach ($items as $i) {
+                $facets['types'][$i['type'] ?? 'game'] = true;
+                if (empty($i['category'])) continue;
+                $facets['categories'][$i['category']] = true;
+                // Counts are scoped to the selected type so "Games" only shows game categories.
+                if ($type === '' || ($i['type'] ?? 'game') === $type) $counts[$i['category']] = ($counts[$i['category']] ?? 0) + 1;
+            }
+            $facets = ['types' => array_keys($facets['types']), 'categories' => array_keys($facets['categories'])];
+            sort($facets['categories']);
+            arsort($counts);
+            $facets['category_counts'] = $counts ?: new stdClass();
+
+            $featured = array_values(array_map('list_row', array_filter($items,
+                fn($i) => !empty($i['featured']['popular']) || !empty($i['featured']['editors_choice']))));
+            $filtered = array_values(array_filter($items, fn($i) => matches_filters($i, $type, $cat, $q)));
+
+            // Home page shelves: the newest N items of each category, biggest category first.
+            $shelves = [];
+            if (isset($_GET['shelves'])) {
+                $n = max(1, min(30, (int)$_GET['shelves']));
+                foreach ($filtered as $i) {
+                    $c = $i['category'] ?? '';
+                    if ($c === '') continue;
+                    $shelves[$c] ??= ['category' => $c, 'count' => 0, 'items' => []];
+                    if ($shelves[$c]['count']++ < $n) $shelves[$c]['items'][] = list_row($i);
+                }
+                $shelves = array_values($shelves);
+                usort($shelves, fn($a, $b) => $b['count'] <=> $a['count']);
+            }
+
+            $per = max(1, min(100, (int)($_GET['per_page'] ?? 24)));
+            $total = count($filtered);
+            $pages = max(1, (int)ceil($total / $per));
+            $page = max(1, min($pages, (int)$_GET['page']));
+            respond([
+                'items' => array_map('list_row', array_slice($filtered, ($page - 1) * $per, $per)),
+                'total' => $total,
+                'page' => $page,
+                'pages' => $pages,
+                'per_page' => $per,
+                'facets' => $facets,
+                'featured' => $featured,
+                'shelves' => $shelves,
+            ]);
 
         case 'get':
             $id = isset($_GET['id']) ? (int)$_GET['id'] : null;

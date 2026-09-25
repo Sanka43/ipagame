@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <meta name="description" content="Download games and apps for iPhone and iPad.">
   <title>Game Store</title>
   <link rel="stylesheet" href="assets/style.css">
@@ -22,62 +22,173 @@
   </header>
 
   <main class="wrap">
-    <label class="search">
+    <div id="today" hidden></div>
+
+    <label class="search" id="searchBox">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Search games and apps" autocomplete="off" aria-label="Search">
     </label>
     <nav class="chips" id="chips" aria-label="Filter"></nav>
 
-    <section id="featured"></section>
+    <div id="shelves"></div>
+    <p class="empty" id="searchHint" hidden>Search by game name, developer or category.</p>
 
-    <section>
+    <section id="listSection">
       <h2 class="section-title"><span id="listTitle">All</span><small id="count"></small></h2>
       <div class="list" id="list"><p class="empty">Loading…</p></div>
+      <nav class="pager" id="pager" aria-label="Pagination"></nav>
     </section>
   </main>
 
   <footer class="foot">Game Store</footer>
 
+  <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+
   <script src="assets/common.js"></script>
   <script>
     const $ = s => document.querySelector(s);
-    const state = { items: [], filter: 'all', q: '' };
+    const PER_PAGE = 24;
+    const SHELF_SIZE = 9;                        // 3 columns of 3 cards
+    // type: '' | 'game' | 'app'; cat: '' | category slug — they combine (e.g. Games → Puzzle).
+    // search: the Search tab is open (stays open while the query is cleared).
+    const state = { type: '', cat: '', q: '', search: false, page: 1, facets: null };
+    const TYPE_LABELS = { game: 'Games', app: 'Apps' };
 
-    function matches(it) {
-      const f = state.filter;
-      if (f.startsWith('type:') && it.type !== f.slice(5)) return false;
-      if (f.startsWith('cat:') && it.category !== f.slice(4)) return false;
-      if (state.q) {
-        const hay = [it.name, it.developer, it.category, it.short_description, ...(it.tags || [])].join(' ').toLowerCase();
-        if (!hay.includes(state.q)) return false;
-      }
-      return true;
+    function readUrl() {
+      const p = new URLSearchParams(location.search);
+      state.type = p.get('type') || '';
+      state.cat = p.get('cat') || '';
+      state.q = (p.get('q') || '').trim().toLowerCase();
+      state.search = p.has('search') || !!state.q;
+      state.page = Math.max(1, parseInt(p.get('page'), 10) || 1);
+      $('#q').value = p.get('q') || '';
+    }
+
+    function writeUrl(push) {
+      const p = new URLSearchParams();
+      if (state.type) p.set('type', state.type);
+      if (state.cat) p.set('cat', state.cat);
+      if (state.q) p.set('q', state.q);
+      else if (state.search) p.set('search', '1');
+      if (state.page > 1) p.set('page', state.page);
+      const url = location.pathname + (p.toString() ? '?' + p : '');
+      history[push ? 'pushState' : 'replaceState'](null, '', url);
     }
 
     function chipsHTML() {
-      const types = new Set(state.items.map(i => i.type));
-      const cats = [...new Set(state.items.map(i => i.category).filter(Boolean))].sort();
-      const chips = [['all', 'All']];
-      if (types.has('game')) chips.push(['type:game', 'Games']);
-      if (types.has('app')) chips.push(['type:app', 'Apps']);
-      cats.forEach(c => chips.push(['cat:' + c, catLabel(c)]));
-      return chips.map(([v, l]) =>
-        `<button class="chip${state.filter === v ? ' active' : ''}" data-f="${esc(v)}">${esc(l)}</button>`).join('');
+      const { category_counts = {} } = state.facets || {};
+      const chip = (attrs, label, active) => `<button class="chip${active ? ' active' : ''}" ${attrs}>${label}</button>`;
+      return [chip('data-cat=""', 'All', !state.cat), ...Object.keys(category_counts)
+        .map(c => chip(`data-cat="${esc(c)}"`, `${catIcon(c)} ${esc(catLabel(c))}`, state.cat === c))].join('');
+    }
+
+    function listTitle() {
+      if (state.q) return 'Results';
+      const parts = [state.cat && catLabel(state.cat), TYPE_LABELS[state.type]].filter(Boolean);
+      return parts.length ? parts.join(' · ') : 'All';
     }
 
     const link = it => `game.html?slug=${encodeURIComponent(it.slug)}`;
 
-    function rowHTML(it) {
-      const meta = [catLabel(it.category), it.latest_version && 'v' + it.latest_version].filter(Boolean).join(' · ');
-      return `<a class="row" href="${link(it)}">
+    const CHEVRON = '<svg class="chev" width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 6 6-6 6"/></svg>';
+    const verLabel = v => v ? 'v' + String(v).replace(/^v/i, '') : '';
+
+    function cardHTML(it) {
+      return `<a class="app-card" href="${link(it)}">
         ${iconHTML(it)}
         <div class="row-info">
-          <div class="row-name">${esc(it.name)}</div>
-          <div class="row-sub">${esc(it.short_description || it.developer || '')}</div>
-          <div class="row-sub">${esc(meta)}</div>
+          <div class="card-name">${esc(it.name)}</div>
+          <div class="card-ver">${esc(verLabel(it.latest_version))}</div>
+          <div class="card-sub">${esc(it.short_description || it.developer || catLabel(it.category))}</div>
         </div>
         <span class="get">GET</span>
       </a>`;
+    }
+
+    const catHref = c => '?' + new URLSearchParams({ ...(state.type && { type: state.type }), cat: c });
+
+    function shelfHTML(s) {
+      return `<section class="shelf">
+        <div class="shelf-head">
+          <h2>${esc(catLabel(s.category))} <small>${s.count}</small></h2>
+          ${s.count > s.items.length ? `<a class="see-all" href="${catHref(s.category)}" data-cat="${esc(s.category)}">See All ${CHEVRON}</a>` : ''}
+        </div>
+        <div class="shelf-track" style="--rows:${Math.min(3, s.items.length)}">${s.items.map(cardHTML).join('')}</div>
+      </section>`;
+    }
+
+    const TODAY_CATS = 8;                        // category tiles on the Today page
+    const TODAY_SHELVES = 3;                     // "popular" shelves on the Today page
+
+    // Screenshot URLs from the App Store CDN end in "/320x480bb.jpg"; ask for a sharper one.
+    const bigShot = u => String(u || '').replace(/\/\d+x\d+bb\.(jpg|png|webp)$/i, '/1000x0w.jpg');
+
+    function heroHTML(it) {
+      const tag = it.featured?.editors_choice ? "Editors' Choice" : it.featured?.popular ? 'Popular Now' : 'New Update';
+      return `<a class="hero-card" id="heroCard" href="${link(it)}">
+        <div class="hero-top">
+          <div class="hero-tag">${tag}</div>
+          <h2>${esc(it.name)}</h2>
+        </div>
+        <div class="hero-foot">
+          ${iconHTML(it, 'sm')}
+          <div class="row-info">
+            <div class="card-name">${esc(it.name)}</div>
+            <div class="card-sub">${esc(it.short_description || it.developer || catLabel(it.category))}</div>
+          </div>
+          <span class="get">GET</span>
+        </div>
+      </a>`;
+    }
+
+    function catTilesHTML(counts) {
+      return `<div class="cat-grid">${counts.map(([c, n]) => `<a class="cat-tile" href="?cat=${encodeURIComponent(c)}" data-cat="${esc(c)}">
+          <span class="cat-ico" aria-hidden="true">${catIcon(c)}</span>
+          <span class="cat-name">${esc(catLabel(c))}</span>
+          <span class="n">${n}</span>
+        </a>`).join('')}</div>`;
+    }
+
+    function todayHTML(r) {
+      const hero = r.featured?.[0] || r.items[0];
+      if (!hero) return '<p class="empty">No games yet.</p>';
+      const fresh = r.items.filter(i => i.id !== hero.id).slice(0, 6);
+      const picks = (r.featured || []).slice(1);
+      const cats = Object.entries(r.facets?.category_counts || {});
+      const date = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+      return `
+        <header class="today-head">
+          <div class="today-date">${esc(date)}</div>
+          <h1>Today</h1>
+        </header>
+        ${heroHTML(hero)}
+        ${picks.length ? `<section class="shelf"><div class="shelf-head"><h2>Editors' Picks</h2></div>
+          <div class="carousel">${picks.map(featureHTML).join('')}</div></section>` : ''}
+        ${fresh.length ? `<section class="shelf"><div class="shelf-head"><h2>New &amp; Updated</h2></div>
+          <div class="shelf-track" style="--rows:${Math.min(3, fresh.length)}">${fresh.map(cardHTML).join('')}</div></section>` : ''}
+        ${cats.length ? `<section class="shelf"><div class="shelf-head"><h2>Top Categories</h2>
+            ${cats.length > TODAY_CATS ? `<a class="see-all" href="./?type=game" data-tab-link="game">See All ${CHEVRON}</a>` : ''}
+          </div>${catTilesHTML(cats.slice(0, TODAY_CATS))}</section>` : ''}
+        ${(r.shelves || []).slice(0, TODAY_SHELVES).map(shelfHTML).join('')}
+        <a class="btn ghost block browse-all" href="./?type=game" data-tab-link="game">Browse all games</a>`;
+    }
+
+    // Fill the hero banner with the game's first screenshot (list rows don't carry screenshots).
+    async function loadHeroImage(slug, id) {
+      try {
+        const { item } = await api('get', { params: { slug } });
+        const src = item.ipad_screenshots?.[0] || item.screenshots?.[0];
+        const card = $('#heroCard');
+        if (!src || id !== reqId || !card) return;
+        const img = new Image();
+        img.className = 'hero-img';
+        img.alt = '';
+        img.onload = () => card.classList.add('has-img');
+        // Fall back to the original size if the CDN won't resize this one.
+        img.onerror = () => { if (img.src !== asset(src)) img.src = asset(src); else img.remove(); };
+        img.src = asset(bigShot(src));
+        card.prepend(img);
+      } catch { /* banner keeps its gradient background */ }
     }
 
     function featureHTML(it) {
@@ -92,39 +203,148 @@
       </a>`;
     }
 
-    function render() {
+    // Page numbers: 1 … 4 5 [6] 7 8 … 50
+    function pagerHTML(page, pages) {
+      if (pages <= 1) return '';
+      const nums = new Set([1, pages]);
+      for (let n = page - 2; n <= page + 2; n++) if (n > 1 && n < pages) nums.add(n);
+      const sorted = [...nums].sort((a, b) => a - b);
+      const btn = (n, label, extra = '') => `<button type="button" data-page="${n}" ${extra}>${label}</button>`;
+      let html = btn(page - 1, '‹', `aria-label="Previous page"${page === 1 ? ' disabled' : ''}`);
+      sorted.forEach((n, i) => {
+        if (i && n - sorted[i - 1] > 1) html += '<span class="gap">…</span>';
+        html += btn(n, n, n === page ? 'aria-current="page"' : `aria-label="Page ${n}"`);
+      });
+      html += btn(page + 1, '›', `aria-label="Next page"${page === pages ? ' disabled' : ''}`);
+      return html;
+    }
+
+    // Views: Home tab = 'today'; Games/Apps tabs = category 'shelves'; a category or search = paged 'list'.
+    const view = () => state.search ? 'search' : state.cat ? 'list' : state.type ? 'shelves' : 'today';
+    const activeTab = () => state.search ? 'search' : state.type || 'home';
+
+    function renderChrome() {
+      $('#tabbar').innerHTML = tabBarHTML(activeTab());
       $('#chips').innerHTML = chipsHTML();
+      const v = view();
+      // Search tab with an empty query: just the search box and a hint.
+      const idle = v === 'search' && !state.q;
+      $('#searchHint').hidden = !idle;
+      $('#today').hidden = v !== 'today';
+      $('#searchBox').hidden = v === 'today';
+      $('#chips').hidden = v === 'today' || v === 'search';
+      $('#listSection').hidden = v === 'today' || v === 'shelves' || idle;
+      if (v !== 'shelves') $('#shelves').innerHTML = '';
+      $('#listTitle').textContent = listTitle();
+    }
 
-      const featured = state.items.filter(i => i.featured?.popular || i.featured?.editors_choice);
-      const showFeatured = state.filter === 'all' && !state.q && featured.length;
-      $('#featured').innerHTML = showFeatured
-        ? `<h2 class="section-title">Featured</h2><div class="carousel">${featured.map(featureHTML).join('')}</div>`
-        : '';
+    let reqId = 0;
+    async function load({ push = false, scroll = false } = {}) {
+      const id = ++reqId;
+      const v = view();
+      const home = v === 'today' || v === 'shelves';
+      const params = v === 'today' ? { page: 1, per_page: 7, shelves: SHELF_SIZE }
+        : v === 'shelves' ? { page: 1, per_page: 1, shelves: SHELF_SIZE }
+        : { page: state.page, per_page: PER_PAGE };
+      if (state.type) params.type = state.type;
+      if (state.cat) params.category = state.cat;
+      if (state.q) params.q = state.q;
 
-      const list = state.items.filter(matches);
-      const active = $('#chips .chip.active');
-      $('#listTitle').textContent = state.q ? 'Results' : (active ? active.textContent : 'All');
-      $('#count').textContent = list.length + (list.length === 1 ? ' item' : ' items');
-      $('#list').innerHTML = list.length
-        ? list.map(rowHTML).join('')
-        : `<p class="empty">${state.items.length ? 'Nothing matches your search.' : 'No games yet.'}</p>`;
+      renderChrome();
+      $('#list').classList.add('loading');
+      try {
+        const r = await api('list', { params });
+        if (id !== reqId) return;               // a newer request replaced this one
+        state.facets = r.facets;
+        if (!home) state.page = r.page;
+        writeUrl(push);
+        renderChrome();
+        if (v === 'today') {
+          $('#today').innerHTML = todayHTML(r);
+          const hero = r.featured?.[0] || r.items[0];
+          if (hero) loadHeroImage(hero.slug, id);
+          if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+        if (home) {
+          $('#shelves').innerHTML = r.shelves?.length
+            ? r.shelves.map(shelfHTML).join('')
+            : `<p class="empty">No ${state.type === 'app' ? 'apps' : 'games'} yet.</p>`;
+          if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+        $('#count').textContent = r.total + (r.total === 1 ? ' item' : ' items') +
+          (r.pages > 1 ? ` · page ${r.page} of ${r.pages}` : '');
+        $('#list').innerHTML = r.items.length
+          ? r.items.map(cardHTML).join('')
+          : `<p class="empty">${state.q || state.type || state.cat ? 'Nothing matches your search.' : 'No games yet.'}</p>`;
+        $('#pager').innerHTML = pagerHTML(r.page, r.pages);
+        if (scroll) $('#listTitle').closest('section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        if (id !== reqId) return;
+        $('#list').innerHTML = `<p class="empty">Could not load games: ${esc(err.message)}</p>`;
+        $('#pager').innerHTML = '';
+      } finally {
+        if (id === reqId) $('#list').classList.remove('loading');
+      }
     }
 
     $('#chips').addEventListener('click', e => {
       const b = e.target.closest('.chip');
       if (!b) return;
-      state.filter = b.dataset.f;
-      render();
+      const cat = state.cat === b.dataset.cat ? '' : b.dataset.cat;   // tap an active chip again to clear
+      if (cat === state.cat) return;
+      state.cat = cat;
+      state.page = 1;
+      load({ push: true });
     });
 
+    // "See All" links, category tiles and "Browse all games" on the Today and shelf views.
+    document.querySelector('main').addEventListener('click', e => {
+      const a = e.target.closest('.see-all, .cat-tile, [data-tab-link]');
+      if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault();
+      if (a.dataset.tabLink) Object.assign(state, { type: a.dataset.tabLink, cat: '' });
+      else state.cat = a.dataset.cat;
+      state.page = 1;
+      load({ push: true });
+      window.scrollTo({ top: 0 });
+    });
+
+    let searchTimer;
     $('#q').addEventListener('input', e => {
-      state.q = e.target.value.trim().toLowerCase();
-      render();
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        state.q = e.target.value.trim().toLowerCase();
+        state.page = 1;
+        load();
+      }, 250);
     });
 
-    api('list')
-      .then(r => { state.items = r.items; render(); })
-      .catch(err => { $('#list').innerHTML = `<p class="empty">Could not load games: ${esc(err.message)}</p>`; });
+    $('#pager').addEventListener('click', e => {
+      const b = e.target.closest('button[data-page]');
+      if (!b || b.disabled) return;
+      state.page = +b.dataset.page;
+      load({ push: true, scroll: true });
+    });
+
+    $('#tabbar').addEventListener('click', e => {
+      const a = e.target.closest('a[data-tab]');
+      if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault();
+      const tab = a.dataset.tab;
+      const again = tab === activeTab() && !state.cat && state.page === 1;
+      Object.assign(state, { cat: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' ? tab : '' });
+      if (tab !== 'search' || !again) { state.q = ''; $('#q').value = ''; }
+      window.scrollTo({ top: 0 });
+      if (tab === 'search') $('#q').focus();
+      if (!again) load({ push: true });
+    });
+
+    window.addEventListener('popstate', () => { readUrl(); load(); });
+
+    readUrl();
+    load();
   </script>
 </body>
 </html>

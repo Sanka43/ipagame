@@ -47,12 +47,52 @@ async function loadStaticData() {
 
 const isPublished = i => (i.status || 'published') === 'published';
 
+const LIST_FIELDS = ['id', 'slug', 'type', 'name', 'developer', 'category', 'icon', 'short_description', 'latest_version', 'featured'];
+const listRow = i => Object.fromEntries(LIST_FIELDS.filter(k => k in i).map(k => [k, i[k]]));
+
+function matchesFilters(i, type, cat, q) {
+  if (type && i.type !== type) return false;
+  if (cat && i.category !== cat) return false;
+  if (!q) return true;
+  return [i.name, i.developer, i.category, i.short_description, ...(i.tags || [])].join(' ').toLowerCase().includes(q);
+}
+
 const staticApi = {
-  async list() {
+  async list(params) {
     const d = await loadStaticData();
     const items = (d.items || []).filter(isPublished)
       .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-    return { items, categories: d.categories || {} };
+    if (params.page == null) return { items, categories: d.categories || {} };
+
+    const q = String(params.q || '').trim().toLowerCase();
+    const filtered = items.filter(i => matchesFilters(i, params.type || '', params.category || '', q));
+    const counts = {};
+    items.forEach(i => {
+      if (i.category && (!params.type || (i.type || 'game') === params.type)) counts[i.category] = (counts[i.category] || 0) + 1;
+    });
+    const shelves = {};
+    if (params.shelves != null) {
+      const n = Math.max(1, Math.min(30, parseInt(params.shelves, 10) || 1));
+      filtered.forEach(i => {
+        if (!i.category) return;
+        const s = shelves[i.category] ||= { category: i.category, count: 0, items: [] };
+        if (s.count++ < n) s.items.push(listRow(i));
+      });
+    }
+    const per = Math.max(1, Math.min(100, parseInt(params.per_page, 10) || 24));
+    const pages = Math.max(1, Math.ceil(filtered.length / per));
+    const page = Math.max(1, Math.min(pages, parseInt(params.page, 10) || 1));
+    return {
+      items: filtered.slice((page - 1) * per, page * per).map(listRow),
+      total: filtered.length, page, pages, per_page: per,
+      facets: {
+        types: [...new Set(items.map(i => i.type || 'game'))],
+        categories: [...new Set(items.map(i => i.category).filter(Boolean))].sort(),
+        category_counts: Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1])),
+      },
+      featured: items.filter(i => i.featured?.popular || i.featured?.editors_choice).map(listRow),
+      shelves: Object.values(shelves).sort((a, b) => b.count - a.count),
+    };
   },
   async get(params) {
     const d = await loadStaticData();
@@ -86,6 +126,28 @@ function iconHTML(item, cls = '') {
 
 function catLabel(c) {
   return (c || '').replace(/-/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+}
+
+const CAT_ICONS = {
+  action: '⚔️', adventure: '🧭', arcade: '👾', casual: '🎈', puzzle: '🧩', racing: '🏎️',
+  'role-playing': '🐉', simulation: '🏗️', strategy: '♟️', sports: '⚽', board: '🎲', card: '🃏',
+  casino: '🎰', family: '👨‍👩‍👧', music: '🎵', trivia: '❓', word: '🔤',
+};
+const catIcon = c => CAT_ICONS[c] || '🎮';
+
+// Bottom tab bar shared by the store pages. `active` is one of the TABS keys (or '' for none).
+const TABS = [
+  ['home', 'Home', './', '<path fill="currentColor" fill-rule="evenodd" d="M7.5 2h9A3.5 3.5 0 0 1 20 5.5v13a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 18.5v-13A3.5 3.5 0 0 1 7.5 2zM8.2 5.8a1 1 0 0 0-1 1v5.4a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V6.8a1 1 0 0 0-1-1zM8.1 15.8a.9.9 0 0 0 0 1.8h7.8a.9.9 0 0 0 0-1.8z"/>'],
+  ['game', 'Games', './?type=game', '<path fill="currentColor" fill-rule="evenodd" d="M21 3c-4.9-.4-8.8 1.5-11.5 5.4L6 8.8a1 1 0 0 0-.8.5L3.4 12.6a.6.6 0 0 0 .6.9l3.2-.4 3.7 3.7-.4 3.2a.6.6 0 0 0 .9.6l3.3-1.8a1 1 0 0 0 .5-.8l.4-3.5C19.5 11.8 21.4 7.9 21 3zM15.4 10.4a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8z"/><path fill="currentColor" d="M6.4 15.4c-1.7.4-2.8 2-3 4.6 2.6-.2 4.2-1.3 4.6-3z"/>'],
+  ['app', 'Apps', './?type=app', '<path fill="currentColor" d="M11.4 2.3a1.3 1.3 0 0 1 1.2 0l7.6 3.8a.7.7 0 0 1 0 1.3l-7.6 3.8a1.3 1.3 0 0 1-1.2 0L3.8 7.4a.7.7 0 0 1 0-1.3z"/><path fill="currentColor" d="M4.1 10.1 12 14.1l7.9-4 1.3.7a.7.7 0 0 1 0 1.3l-8.6 4.3a1.3 1.3 0 0 1-1.2 0l-8.6-4.3a.7.7 0 0 1 0-1.3z"/><path fill="currentColor" d="M4.1 14.4 12 18.4l7.9-4 1.3.7a.7.7 0 0 1 0 1.3l-8.6 4.3a1.3 1.3 0 0 1-1.2 0l-8.6-4.3a.7.7 0 0 1 0-1.3z"/>'],
+  ['search', 'Search', './?search=1', '<circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="m15.5 15.5 5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>'],
+];
+
+function tabBarHTML(active = '') {
+  return TABS.map(([key, label, href, icon]) => `<a href="${href}" data-tab="${key}"${key === active ? ' aria-current="page"' : ''}>
+      <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>
+      <span>${label}</span>
+    </a>`).join('');
 }
 
 function fmtSize(mb) {

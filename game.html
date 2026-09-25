@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <title>Game Store</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
@@ -17,9 +17,12 @@
     <div id="content"><p class="empty">Loading…</p></div>
   </main>
 
+  <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+
   <script src="assets/common.js"></script>
   <script>
     const el = document.getElementById('content');
+    document.getElementById('tabbar').innerHTML = tabBarHTML();
     const slug = new URLSearchParams(location.search).get('slug') || '';
 
     const dlIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>';
@@ -30,6 +33,7 @@
 
     function render(it) {
       document.title = it.seo?.title || it.name;
+      document.getElementById('tabbar').innerHTML = tabBarHTML(it.type || 'game');
       const latest = it.versions?.[0];
       const stat = (k, v) => `<div class="stat"><div class="k">${k}</div><div class="v" title="${esc(v)}">${esc(v || '—')}</div></div>`;
 
@@ -58,7 +62,9 @@
         <div class="stats">
           ${stat('Version', it.latest_version)}
           ${stat('Size', fmtSize(latest?.size_mb))}
-          ${stat('Category', catLabel(it.category))}
+          ${it.category
+            ? `<div class="stat"><div class="k">Category</div><div class="v"><a href="./?type=${encodeURIComponent(it.type || 'game')}&cat=${encodeURIComponent(it.category)}">${esc(catLabel(it.category))}</a></div></div>`
+            : stat('Category', '')}
           ${stat('Requires', it.min_ios ? 'iOS ' + it.min_ios : '')}
         </div>
 
