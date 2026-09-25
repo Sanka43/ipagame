@@ -232,13 +232,15 @@
       const list = items.filter(i => !q || [i.name, i.developer, i.category].join(' ').toLowerCase().includes(q));
       $('#list').innerHTML = list.length ? list.map(it => {
         const n = it.versions?.length || 0;
-        const meta = [it.type === 'app' ? 'App' : 'Game', catLabel(it.category), it.latest_version && 'v' + it.latest_version, `${n} version${n === 1 ? '' : 's'}`]
+        const meta = [it.type === 'app' ? 'App' : 'Game', catLabel(it.category), it.latest_version && 'v' + String(it.latest_version).replace(/^v/i, ''), `${n} version${n === 1 ? '' : 's'}`]
           .filter(Boolean).join(' · ');
+        const dl = it.versions?.[0]?.download_url || '';
         return `<div class="row">
           ${iconHTML(it, 'sm')}
           <div class="row-info">
             <div class="row-name">${esc(it.name)} ${it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''}</div>
             <div class="row-sub">${esc(meta)}</div>
+            ${dl ? `<a class="row-link" href="${esc(asset(dl))}" target="_blank" rel="noopener" title="${esc(dl)}">${esc(dl.replace(/^https?:\/\//i, ''))}</a>` : '<div class="row-sub">No download link</div>'}
           </div>
           <div class="row-actions">
             <button class="btn sm ghost" data-edit="${it.id}">Edit</button>

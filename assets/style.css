@@ -244,6 +244,8 @@ textarea.input { height: auto; min-height: 96px; padding: 10px 12px; resize: ver
 .toolbar .search { flex: 1; margin: 0; }
 .admin-list { display: grid; }
 .row-actions { display: flex; gap: 6px; flex: none; }
+.row-link { display: block; color: var(--accent); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-link:hover { text-decoration: underline; }
 @media (max-width: 479px) {
   .admin-list .row { flex-wrap: wrap; }
   .admin-list .row-actions { width: 100%; padding-left: 62px; }
