@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+  <title>Game Store</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <main class="wrap detail" id="app">
+    <a class="back" href="./">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Store
+    </a>
+    <div id="content"><p class="empty">Loading…</p></div>
+  </main>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const el = document.getElementById('content');
+    const slug = new URLSearchParams(location.search).get('slug') || '';
+
+    const dlIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>';
+
+    function dlLink(v, label, cls = 'btn') {
+      return `<a class="${cls}" href="${esc(asset(v.download_url))}" rel="nofollow noopener" target="_blank">${dlIcon}${esc(label)}</a>`;
+    }
+
+    function render(it) {
+      document.title = it.seo?.title || it.name;
+      const latest = it.versions?.[0];
+      const stat = (k, v) => `<div class="stat"><div class="k">${k}</div><div class="v" title="${esc(v)}">${esc(v || '—')}</div></div>`;
+
+      const versions = (it.versions || []).map((v, i) => `
+        <div class="card">
+          <div class="ver-head">
+            <strong>v${esc(v.version)}</strong>
+            ${i === 0 ? '<span class="badge">Latest</span>' : ''}
+            <span class="spacer"></span>
+            <span class="ver-meta">${esc([fmtDate(v.release_date), fmtSize(v.size_mb)].filter(Boolean).join(' · '))}</span>
+          </div>
+          ${v.changelog ? `<p class="ver-notes">${esc(v.changelog)}</p>` : '<div style="height:12px"></div>'}
+          ${dlLink(v, 'Download v' + v.version, i === 0 ? 'btn sm' : 'btn sm ghost')}
+        </div>`).join('');
+
+      el.innerHTML = `
+        <div class="hero">
+          ${iconHTML(it, 'lg')}
+          <div class="hero-info">
+            <h1>${esc(it.name)}</h1>
+            <div class="dev">${esc(it.developer || catLabel(it.category))}</div>
+            ${latest ? dlLink(latest, 'Download') : ''}
+          </div>
+        </div>
+
+        <div class="stats">
+          ${stat('Version', it.latest_version)}
+          ${stat('Size', fmtSize(latest?.size_mb))}
+          ${stat('Category', catLabel(it.category))}
+          ${stat('Requires', it.min_ios ? 'iOS ' + it.min_ios : '')}
+        </div>
+
+        ${it.description || it.short_description ? `
+          <h2 class="section-title">About</h2>
+          <p class="desc">${esc(it.description || it.short_description)}</p>` : ''}
+
+        <h2 class="section-title">Versions <small>${it.versions?.length || 0}</small></h2>
+        <div class="versions">${versions || '<p class="muted">No versions yet.</p>'}</div>
+      `;
+    }
+
+    if (!slug) {
+      el.innerHTML = '<p class="empty">Game not found.</p>';
+    } else {
+      api('get', { params: { slug } })
+        .then(r => render(r.item))
+        .catch(err => { el.innerHTML = `<p class="empty">${err.status === 404 ? 'Game not found.' : esc(err.message)}</p>`; });
+    }
+  </script>
+</body>
+</html>

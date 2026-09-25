@@ -1,0 +1,1031 @@
+{
+    "meta": {
+        "version": 1,
+        "updated_at": "2026-09-24T16:24:35Z",
+        "total": 13
+    },
+    "categories": {
+        "games": [
+            "action",
+            "adventure",
+            "arcade",
+            "casual",
+            "puzzle",
+            "racing",
+            "role-playing",
+            "simulation",
+            "strategy",
+            "sports",
+            "card",
+            "entertainment",
+            "family",
+            "word",
+            "music",
+            "casino",
+            "education",
+            "trivia",
+            "health-fitness",
+            "utilities",
+            "lifestyle",
+            "board",
+            "social-networking",
+            "travel",
+            "finance",
+            "photo-video",
+            "graphics-design",
+            "reference"
+        ],
+        "apps": [
+            "communication",
+            "entertainment",
+            "graphics-design",
+            "health-fitness",
+            "photo-video",
+            "productivity",
+            "utilities",
+            "education",
+            "music"
+        ]
+    },
+    "items": [
+        {
+            "id": 1,
+            "type": "game",
+            "slug": "example-game",
+            "name": "Example Game",
+            "category": "arcade",
+            "developer": "Example Studio",
+            "bundle_id": "com.example.game",
+            "app_store_url": "https://apps.apple.com/app/id0000000000",
+            "icon": "uploads/icons/example-game.png",
+            "screenshots": [
+                "uploads/screens/example-game-1.jpg",
+                "uploads/screens/example-game-2.jpg"
+            ],
+            "short_description": "One-line summary shown on cards and in the meta description.",
+            "description": "Full description written in your own words.",
+            "min_ios": "13.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "en"
+            ],
+            "tags": [
+                "offline",
+                "singleplayer"
+            ],
+            "rating": {
+                "value": 4.5,
+                "count": 120
+            },
+            "featured": {
+                "popular": true,
+                "editors_choice": false
+            },
+            "latest_version": "1.2.0",
+            "versions": [
+                {
+                    "version": "1.2.0",
+                    "release_date": "2026-09-15",
+                    "size_mb": 250.4,
+                    "changelog": "Bug fixes and performance improvements.",
+                    "download_url": "https://example.com/files/example-game-1.2.0.ipa"
+                },
+                {
+                    "version": "1.1.0",
+                    "release_date": "2026-07-02",
+                    "size_mb": 245.1,
+                    "changelog": "New levels added.",
+                    "download_url": "https://example.com/files/example-game-1.1.0.ipa"
+                }
+            ],
+            "seo": {
+                "title": "Example Game v1.2.0 for iPhone and iPad",
+                "meta_description": "Example Game for iPhone and iPad. Latest version, changelog and install guide."
+            },
+            "status": "published",
+            "created_at": "2026-09-01T10:00:00Z",
+            "updated_at": "2026-09-15T10:00:00Z"
+        },
+        {
+            "id": 2,
+            "type": "app",
+            "slug": "example-photo-editor",
+            "name": "Example Photo Editor",
+            "category": "photo-video",
+            "developer": "Example Labs",
+            "bundle_id": "com.example.photoeditor",
+            "app_store_url": "https://apps.apple.com/app/id0000000001",
+            "icon": "uploads/icons/example-photo-editor.png",
+            "screenshots": [
+                "uploads/screens/example-photo-editor-1.jpg"
+            ],
+            "short_description": "Simple photo editor with filters and AI tools.",
+            "description": "Full description written in your own words.",
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "en"
+            ],
+            "tags": [
+                "photo",
+                "ai"
+            ],
+            "rating": {
+                "value": 4.2,
+                "count": 58
+            },
+            "featured": {
+                "popular": false,
+                "editors_choice": true
+            },
+            "latest_version": "3.0.1",
+            "versions": [
+                {
+                    "version": "3.0.1",
+                    "release_date": "2026-09-10",
+                    "size_mb": 88.7,
+                    "changelog": "Stability fixes.",
+                    "download_url": "https://example.com/files/example-photo-editor-3.0.1.ipa"
+                }
+            ],
+            "seo": {
+                "title": "Example Photo Editor v3.0.1 for iPhone",
+                "meta_description": "Example Photo Editor for iPhone and iPad. Latest version and changelog."
+            },
+            "status": "published",
+            "created_at": "2026-08-20T10:00:00Z",
+            "updated_at": "2026-09-10T10:00:00Z"
+        },
+        {
+            "id": 3,
+            "type": "game",
+            "slug": "minecraft-ipa",
+            "name": "Minecraft IPA",
+            "category": "arcade",
+            "developer": "Mojang AB",
+            "icon": "https://iosvizor.com/wp-content/uploads/2017/09/Minecraft.png",
+            "short_description": "",
+            "description": "",
+            "min_ios": "",
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "v1.26.51",
+            "versions": [
+                {
+                    "version": "v1.26.51",
+                    "release_date": "2026-09-24",
+                    "size_mb": 667.7,
+                    "changelog": "",
+                    "download_url": "https://dl.mcpelife.com/minecraft-pe/1-26-51-1/Minecraft-1.26.50-for-iOS-mcpelife.ipa"
+                }
+            ],
+            "seo": {
+                "title": "Minecraft IPA vv1.26.51",
+                "meta_description": "Minecraft IPA"
+            },
+            "status": "published",
+            "created_at": "2026-09-24T15:52:14Z",
+            "updated_at": "2026-09-24T15:52:14Z"
+        },
+        {
+            "id": 4,
+            "slug": "block-out-color-sort-puzzle",
+            "type": "game",
+            "name": "Block Out! - Color Sort Puzzle",
+            "category": "puzzle",
+            "developer": "Grand Games A.Ş.",
+            "bundle_id": "com.grandgames.catblockjam",
+            "app_store_id": "6752672568",
+            "app_store_url": "https://apps.apple.com/us/app/block-out-color-sort-puzzle/id6752672568?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/1f/b0/2d/1fb02d35-d751-2a0e-dd59-0e9b3580924d/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/70/38/e5/7038e5dc-5fcf-26ab-6b29-69547f7a46aa/CLEARTHEBOARD.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/a1/cd/b4/a1cdb409-726b-09db-fb67-e9131c9e5c46/CHALLENGEYOURSELF.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/ac/fc/e7/acfce70d-5909-4a58-5f92-76493de32eb5/ACTIVATEBOOSTERS.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/b1/0f/17/b10f173c-189c-6537-af3a-9c046b5e18d5/UNIQUEOBSTACLES.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/ab/75/3f/ab753fb5-1f38-d272-47af-39ba16669e53/BEATTHECLOCK.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/2a/bc/3d/2abc3d21-70eb-a742-db78-acbe5aa93b31/Splash_Store_03.png/320x480bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/8e/3d/1b/8e3d1bbb-6f0e-1ec5-6d06-3e4277c9e1e2/CLEARTHEBOARD.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/62/4a/24/624a24a7-d4fa-c350-68ad-91a20afc54f9/CHALLENGEYOURSELF.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/65/45/4f/65454fc3-3ce2-97af-b0c7-64b387c86ab8/ACTIVATEBOOSTERS.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/d1/0f/5c/d10f5c17-302f-9f24-a589-4b9924a5b504/UNIQUEOBSTACLES.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/f3/14/95/f31495be-ff7f-cd2e-18b1-38f6aa3c6bf5/BEATTHECLOCK.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/16/4f/f2/164ff2b2-5dea-5d86-c24b-fa73d2fa8ef6/Splash_Store_02.png/360x480bb.jpg"
+            ],
+            "min_ios": "13.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "de",
+                "en",
+                "es",
+                "fr",
+                "it",
+                "ja",
+                "ko",
+                "nl",
+                "pt",
+                "ru",
+                "tr"
+            ],
+            "content_rating": "4+",
+            "rating": {
+                "value": 4.73,
+                "count": 261107
+            },
+            "short_description": "Get ready for Block Out!, a block puzzle game where every level feels alive. Slide colorful blocks, match them with their targets while experiencing…",
+            "description": "Get ready for Block Out!, a block puzzle game where every level feels alive. Slide colorful blocks, match them with their targets while experiencing the unique twist of moving elevators and block generators. Each puzzle feels fresh with ever-changing layouts. Plan your moves, think quickly, and enjoy the satisfaction of perfect clears as you progress through a colorful and evolving puzzle adventure. Block Out! offers a puzzle experience that keeps you coming back for more. Accept the challenge and start your journey! \n\nQuick Play Guide\n- Start Simple: Slide the blocks to the matching doors and create satisfying clears.\n- Plan Ahead: Position blocks carefully, manage space, and keep up with dynamic challenges. \n- Think Fast: Move faster to complete levels and unlock new challenges.\n\nCool Features\n- Offline Play: Enjoy anywhere, anytime—no wi-fi required.\n- Strategic Gameplay: Start simple, think twice. Plan your moves and experience the satisfaction of clearing each puzzle.\n- Dynamic Obstacles:  Block generators, moving elevators, and other elements bring variety and spice to every level.\n- Colorful Visuals: Bright and gorgeous design makes every puzzle a joy to solve.\n\nBlock Out! is designed for puzzle lovers who enjoy both strategy and action. Download Block Out! now and explore the dynamic world of colorful puzzles.",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "1004",
+            "versions": [
+                {
+                    "version": "1004",
+                    "release_date": "2026-09-14",
+                    "size_mb": 513.9,
+                    "changelog": "Are you ready for an update?\n\n- New Area: Jurassic Adventure! Join our friends as they uncover the amazing world of dinosaurs!\n- Brand-new levels are waiting for you!\n- Bug fixes for a smoother gameplay experience!\n- UX improvements to make your adventure even better!",
+                    "download_url": "https://apps.apple.com/us/app/block-out-color-sort-puzzle/id6752672568?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Block Out! - Color Sort Puzzle v1004 for iPhone and iPad",
+                "meta_description": "Block Out! - Color Sort Puzzle – free on the App Store. Latest version 1004, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 5,
+            "slug": "meowdoku",
+            "type": "game",
+            "name": "Meowdoku!",
+            "category": "casual",
+            "developer": "Oakever Games",
+            "bundle_id": "com.oakever.meowdoku",
+            "app_store_id": "6761760135",
+            "app_store_url": "https://apps.apple.com/us/app/meowdoku/id6761760135?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/bb/92/ba/bb92ba02-bec3-41fb-c5e9-b6875bcb5d1e/AppIcon-0-0-1x_U007epad-0-11-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/9f/61/fb/9f61fba0-1abe-8afa-4fee-98d9d4844126/1.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/14/b0/42/14b042eb-1a67-e3d4-c439-f5b3f884788a/2.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/88/26/b9/8826b9df-9f17-e37e-7360-fb828b7c12d6/3.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/de/0d/d2/de0dd242-5f25-55ff-dee1-199a4a3535ec/4.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/c6/69/e8/c669e83e-2dc4-07d3-131e-ad0067d07e41/5.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/4a/82/c2/4a82c2e6-d0af-3d4e-6e44-53f5aea4c4db/6.png/320x480bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/18/d9/29/18d929bd-bce1-2daa-403c-11e4099cb4e2/1.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/dc/1b/01/dc1b012c-7f6c-8fe4-86ae-23b58124a792/2.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/37/5e/2d/375e2d03-a8b0-b7ec-7247-3b3098628340/3.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/c6/b6/53/c6b6533a-acd1-2970-d1d9-00332e4bc670/4.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/40/e9/25/40e925b3-1483-9047-ea8b-a1819da53abc/5.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/7d/5c/ab/7d5cab26-d0d7-f26c-b0c9-338662de5556/6.png/360x480bb.jpg"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "af",
+                "am",
+                "ar",
+                "az",
+                "be",
+                "bn",
+                "bs",
+                "ca",
+                "cs",
+                "da",
+                "de",
+                "el",
+                "en",
+                "es",
+                "fa",
+                "fi",
+                "fr",
+                "gu",
+                "he",
+                "hi",
+                "hr",
+                "hu",
+                "id",
+                "is",
+                "it",
+                "ja",
+                "kk",
+                "km",
+                "kn",
+                "ko",
+                "lo",
+                "lt",
+                "mk",
+                "ml",
+                "mn",
+                "mr",
+                "ms",
+                "nb",
+                "ne",
+                "nl",
+                "pa",
+                "pl",
+                "pt",
+                "ro",
+                "ru",
+                "si",
+                "sk",
+                "sl",
+                "sr",
+                "sv",
+                "sw",
+                "ta",
+                "te",
+                "th",
+                "tr",
+                "uk",
+                "ur",
+                "uz",
+                "vi",
+                "zh"
+            ],
+            "content_rating": "12+",
+            "rating": {
+                "value": 4.81,
+                "count": 243289
+            },
+            "short_description": "Looking for a game that soothes the soul but keeps your brain spinning? Welcome to Meowdoku — a pure logic puzzle game that flawlessly blends the…",
+            "description": "Looking for a game that soothes the soul but keeps your brain spinning? Welcome to Meowdoku — a pure logic puzzle game that flawlessly blends the rigorous reasoning of Sudoku with the thrilling deduction of Minesweeper.\n\nHere, you have only one mission: find the perfect \"exclusive territory\" for every aloof little cat!\nSimple Rules, Deep Strategy\n\nThe concept is elegant and intuitive, yet anything but simple:\n• Exclusive Territory: The board is divided into colored sections. You must place exactly one cat in each section.\n• The Aloof Rule: Cats need absolute personal space! They absolutely cannot share the same row, column, or touch each other—not even diagonally.\n• Risk & Reward: Double-tap a tile to place a cat. You only have 3 chances to make a mistake (hearts). Guess right, and you're rewarded with pure puzzle-solving satisfaction; guess wrong, and you lose a heart. Guessing won't save you; every single move must be carefully calculated!\n\nKey Features\n• Pure & Immersive Experience\n• Non-Intrusive Ads: Zero interruptions to your gameplay, letting you fully enjoy a completely focused, Zen-like flow state.\n• Play Offline Anytime: No internet required. Perfectly fills up the puzzle-shaped hole in your daily commute, time spent waiting in line, or your morning coffee break.\n\nWake up your mind with brand-new \"Daily Puzzles\" every single day.\nPush your limits and see if you can break your fastest completion times on the global leaderboards. Why Meowdoku Will Stay on Your Phone Meowdoku won't hijack your attention with tedious social mechanics or endless daily grinds—it earns your love through pure gameplay quality. With its minimalist aesthetic and satisfying tactile feedback, it takes just seconds to learn. Yet, long after you put your phone down, its elegant logic loop will keep lingering in your mind. Ready for a brain-teasing puzzle adventure filled with adorable felines? Download Meowdoku now, put your logic to the test, and become the ultimate feline puzzle master!\n\nTerms: https://oakevergames.com/tos.html\nPrivacy Policy: https://oakevergames.com/pp.html\nEULA: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\nEmail: support@oakevergames.com",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "1.18.0",
+            "versions": [
+                {
+                    "version": "1.18.0",
+                    "release_date": "2026-09-20",
+                    "size_mb": 371.7,
+                    "changelog": "-Bug fixes and performance improvements.",
+                    "download_url": "https://apps.apple.com/us/app/meowdoku/id6761760135?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Meowdoku! v1.18.0 for iPhone and iPad",
+                "meta_description": "Meowdoku! – free on the App Store. Latest version 1.18.0, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 6,
+            "slug": "smash-fest",
+            "type": "game",
+            "name": "Smash Fest!",
+            "category": "casual",
+            "developer": "Flow Games Bilisim Yazilim ve Pazarlama Anonim Sirketi",
+            "bundle_id": "com.flow.cannon-ball",
+            "app_store_id": "6748084174",
+            "app_store_url": "https://apps.apple.com/us/app/smash-fest/id6748084174?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/19/40/db/1940db5a-3f81-fabc-1fad-48a5df75e5c5/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/0f/7a/07/0f7a0703-d8a6-c7f3-a767-7971ca4a6e72/KnockemAll.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/a8/50/c9/a850c99d-ea56-89c1-9991-bf4b9c48a143/Smash.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/38/c9/7a/38c97a52-e6d2-bd9e-c228-7d83004405f3/EnjoyNewLevels.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/c1/f1/70/c1f170de-7b10-7bea-09c9-50fd1e053d13/ChallangeYourself.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/bc/75/1f/bc751fcf-24d9-6728-f623-7ce560db1df4/ClearTheTable.png/320x480bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/f9/58/a5/f958a545-32f4-d334-2117-262b9bf9e498/KnockemAll.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/89/b0/a1/89b0a109-49cb-fbd2-7f91-a1c84a793637/Smash.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/70/36/8b/70368bb7-f3cf-cb53-7dc6-509e79436d01/EnjoyNewLevels.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/49/19/e7/4919e7e2-0321-62de-3471-c21ede2f7a88/ChallangeYourself.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/fb/d4/37/fbd4378b-ff10-39e9-3503-8177e0ecf00d/ClearTheTable.png/360x480bb.jpg"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "en"
+            ],
+            "content_rating": "4+",
+            "rating": {
+                "value": 4.72,
+                "count": 482792
+            },
+            "short_description": "Welcome to Smash Fest! Get ready for the most explosive festival in town! Step into a colorful arena where every shot counts — fire your cannon…",
+            "description": "Welcome to Smash Fest!\nGet ready for the most explosive festival in town! Step into a colorful arena where every shot counts — fire your cannon, smash through fragile jars, break apart heavy stones, and watch the chaos unfold in the most satisfying way.\nEach level is a brand-new challenge. Adjust your angle, power, and timing to create the perfect launch. One clean shot can trigger a chain of destruction that feels like pure magic. Easy to play from the first minute, but full of skill and precision for players who love mastering mechanics.\nFrom lively festival scenes to dynamic destruction effects, Smash Fest brings the ultimate aim – shoot – smash experience!\nKey Features\n- Stunning high-quality 3D visuals\n- Satisfying destruction: shattering jars & crumbling stones\n- Skill-based shot mechanics that reward perfect accuracy\n- Colorful festival environments with animated scenes\n- Simple controls, endlessly fun progression\nThe festival is ready!\nFire the cannon and let the show begin!",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "666",
+            "versions": [
+                {
+                    "version": "666",
+                    "release_date": "2026-09-23",
+                    "size_mb": 286.9,
+                    "changelog": "Bug fixes and improvements",
+                    "download_url": "https://apps.apple.com/us/app/smash-fest/id6748084174?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Smash Fest! v666 for iPhone and iPad",
+                "meta_description": "Smash Fest! – free on the App Store. Latest version 666, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 7,
+            "slug": "aniimo",
+            "type": "game",
+            "name": "Aniimo",
+            "category": "role-playing",
+            "developer": "PAWPRINT INTERACTIVE ENTERTAINMENT PTE. LTD",
+            "bundle_id": "com.x.aniimos.ios",
+            "app_store_id": "6759098797",
+            "app_store_url": "https://apps.apple.com/us/app/aniimo/id6759098797?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/ab/a8/2e/aba82e5b-5492-1e01-d677-634abedfa5e8/FPX_AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/dc/e3/5f/dce35f54-0465-4347-16cd-e513e973c866/_U9996_U56fe_U002811_U0029.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/96/f3/5b/96f35b83-d444-f9b3-cd20-e0d23258c95c/1.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/39/45/60/394560a4-8361-d5ac-1134-431f7b7fde77/2.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/6c/c6/67/6cc66709-5459-4c33-3ca3-cad0d7de822e/3.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/97/a5/3a/97a53a32-0227-298e-bc47-15be6af79ac1/4.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/4c/a8/a1/4ca8a1dc-660f-9f5b-54ea-28a188458670/5.jpg/320x480bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/f7/6d/21/f76d213c-6bda-8150-cc63-5d55b2f2d936/_U9996_U56fe_U00289_U0029.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/fc/c2/af/fcc2af67-eb79-a8fc-d28b-be0ab144a4a7/1.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/89/b5/5d/89b55d4a-c309-2083-453a-2b2035e2328f/2.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/60/f1/3c/60f13c1e-cc74-672f-35fd-a7c4199be277/3.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/04/81/f2/0481f229-47c6-5a82-e1da-ae8685e56b76/4.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/66/0e/41/660e4191-b41b-d3b0-38d4-0f40a7f39280/5.jpg/360x480bb.jpg"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "de",
+                "en",
+                "es",
+                "fr",
+                "id",
+                "ja",
+                "ko",
+                "pt",
+                "ru",
+                "th",
+                "vi",
+                "zh"
+            ],
+            "content_rating": "9+",
+            "rating": {
+                "value": 3.42,
+                "count": 959
+            },
+            "short_description": "Aniimo is a free-to-play, next-gen creature-catching open-world RPG. On the vast continent of Idyll, you'll encounter countless unique creatures…",
+            "description": "Aniimo is a free-to-play, next-gen creature-catching open-world RPG. On the vast continent of Idyll, you'll encounter countless unique creatures known as Aniimo. Twine with them and experience the beauty of this world from a completely new perspective and with new abilities.\nYou can also travel to a metropolis floating in the sky, where you'll meet other Pathfinders, share stories, and engage in thrilling competitive battles. Choose your Aniimo and embark on an epic journey - one full of exploration, discovery, and adventure!\n\nSeize every chance to capture and collect Aniimo to your heart's desire! \n\nWhen embarking on an adventure on Idyll, anyone you meet can become a companion! Catch Aniimo using Aniipods, set traps and time your catch perfectly - enjoy the thrill and uncertainty of every moment! Unique Aniimo will appear according to the environment, weather, phenomena and time of day. Most Aniimo can evolve, making collecting and discovering Aniimo even more exciting.\n\nTwine with Aniimo to feel the world like they do\n\nOn your journey of adventure you can Twine with Aniimo and essentially become any Aniimo that you collect. Use the Aniimo’s skills to solve puzzles, win battles and overcome challenges! Twine with Aniimo, to see the world from a brand new perspective.\n\nJump into the adventure and enjoy exploring an expansive open world\n\nThe continent of Idyll is expansive and alive with beauty and the perfect setting to capture, to Twine, to find answers and for the Aniimo to reach their full potential. Challenge, race, discover... immersive exploration ensures every step of the journey is engaging. Whether you're gliding, diving, burrowing... you can step foot anywhere.\n\nJoin exciting real-time challenges with Aniimo\n\nIn the vast world of Aniimo, every real-time challenge is full of unknowns and surprises. The PVEVP mode \"Egg Heist\" allows you to join a 3-player team anytime to engage in real-time searches and battles in the Lost Isles.\nWhether you're solo, multiplayer, adventuring, battling, or simply looking to quickly become stronger, here, every challenge is real and instantaneous!\n\nEnjoying camping and roadtrips with your friends\n\nEach Pathfinder now owns a personal RV on the vast continent of Idyll, parked at a campsite in this open world, where they can meet and interact with other players. When you return to Homeland with your RV, you can plant crops, build decorations, and freely arrange your space with Aniimo to transform the entire Homeland into a warm, fun, and interactive immersive paradise.",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "1.0.3",
+            "versions": [
+                {
+                    "version": "1.0.3",
+                    "release_date": "2026-09-21",
+                    "size_mb": 3547.2,
+                    "changelog": "Related issues fixed.",
+                    "download_url": "https://apps.apple.com/us/app/aniimo/id6759098797?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Aniimo v1.0.3 for iPhone and iPad",
+                "meta_description": "Aniimo – free on the App Store. Latest version 1.0.3, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 8,
+            "slug": "colony-flow",
+            "type": "game",
+            "name": "Colony Flow!",
+            "category": "puzzle",
+            "developer": "ABI GLOBAL LTD.",
+            "bundle_id": "com.abi.colony.flow",
+            "app_store_id": "6779167923",
+            "app_store_url": "https://apps.apple.com/us/app/colony-flow/id6779167923?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/94/4a/c0/944ac051-8f03-ef8b-8ec5-7eebf5b49f8b/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/9d/46/be/9d46be17-ffb6-332b-6a4f-b67277739520/7.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/1b/e4/d0/1be4d051-00c8-8a4a-8b22-77bd904c6b95/9.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/58/ca/20/58ca2060-ff6e-8c65-70ba-b14859533e6d/ss1.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/a5/ad/3b/a5ad3b15-84ec-e560-2561-4195bf7abb47/2.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/c1/08/4b/c1084b3d-d287-6f55-de3f-394c12e6bac7/ss5.jpg/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/a8/ad/35/a8ad35ab-d410-49d5-4db7-9cd7f6ca4067/8.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/aa/3e/14/aa3e1457-ce12-1caa-1145-9e048bfa112b/ss3.jpg/320x480bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/97/2b/3f/972b3fa2-4f95-ce98-3a83-5bfe689ec8ff/7.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/f4/c3/92/f4c39236-66b8-7788-e3f8-4f26c914fe43/9.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/1f/a7/e6/1fa7e613-d9ec-af95-c40f-7a7a6f52b1dd/ss1.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/bd/c3/9a/bdc39acd-6f32-5408-02e6-d41e32120fd8/2.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/30/03/42/300342cc-eef3-8e93-b65d-947913879865/ss5.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/31/7e/5d/317e5deb-2f23-2058-6c1a-53a6ee22c0f8/8.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/23/79/1a/23791aa1-deff-591b-272c-1564b439fd41/ss3.jpg/360x480bb.jpg"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "de",
+                "en",
+                "es",
+                "fr",
+                "ja",
+                "ko",
+                "zh"
+            ],
+            "content_rating": "4+",
+            "rating": {
+                "value": 4.7,
+                "count": 24451
+            },
+            "short_description": "Welcome to Colony Flow — a relaxing ant colony puzzle where every tiny ant has a job to do! Tap a box, watch the workers pour out, and send them…",
+            "description": "Welcome to Colony Flow — a relaxing ant colony puzzle where every tiny ant has a job to do! Tap a box, watch the workers pour out, and send them marching up to the pixel picture to carry colorful blocks back to the nest, one busy trip at a time.\n\nEach level gives you a stack of ant boxes and just five open slots. Tap a box and it slides into a slot, releasing a swarm of ants in that color — they'll haul away every matching block in the picture. Clear a box and the slot frees up for the next one.\n\nThat's where the thinking starts. Open a color that has nothing left to carry and that slot stays clogged. Fill all five and your colony grinds to a halt. Read the picture, count what's left, and choose your boxes in the right order to keep the ants flowing.\n\nCOMMAND YOUR COLONY\n\n- Tap a box to send its ants marching\n- Watch workers haul matching blocks back to the nest\n- Manage your five slots — don't let them clog\n- Unlock the boxes buried further down the stack\n- Clear every block to finish the puzzle\n\nEASY TO LEARN, SATISFYING TO SOLVE\n\n- One-tap controls — start playing in seconds\n- Puzzles that grow from cozy to genuinely clever\n- No timers, no lives, no pressure — take as long as you like\n- Watch trails of ants stream across the board as your plan pays off\n- Every solved board reveals the picture hiding underneath\n\nDISCOVER PIXEL ART\nComplete hundreds of colorful levels with themes like animals, fruit, food, flowers, nature, festivals, toys, rockets, castles, and plenty more surprises. Every puzzle you finish adds another piece of pixel art to your collection, so there's always one more picture waiting to be uncovered.\n\nWith adorable ants, satisfying animations, soothing music, and no time pressure, Colony Flow is easy to pick up and gentle to play — the kind of game that fits into a coffee break, a commute, or a quiet evening on the couch. But clearing every level will take some clever planning.\n\nTap the right boxes, guide your ants, clear the blocks, and uncover beautiful pixel art. Your colony is waiting!",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "1.1.46",
+            "versions": [
+                {
+                    "version": "1.1.46",
+                    "release_date": "2026-09-18",
+                    "size_mb": 432.1,
+                    "changelog": "- New Features & Bundles: Introduced the Sweet Step, along with the new Superior Bundle.\n- Performance Enhancements: Optimized frame rates and loading times for a significantly smoother experience.\n- Bug Fixes: Resolved reported issues and strengthened overall build stability.",
+                    "download_url": "https://apps.apple.com/us/app/colony-flow/id6779167923?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Colony Flow! v1.1.46 for iPhone and iPad",
+                "meta_description": "Colony Flow! – free on the App Store. Latest version 1.1.46, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 9,
+            "slug": "vita-mahjong",
+            "type": "game",
+            "name": "Vita Mahjong",
+            "category": "card",
+            "developer": "Vita Studio",
+            "bundle_id": "com.vitastudio.mahjong",
+            "app_store_id": "6468921495",
+            "app_store_url": "https://apps.apple.com/us/app/vita-mahjong/id6468921495?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/d7/06/5f/d7065f39-2046-15d0-ad6c-3d00529bb06a/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/40/b9/f2/40b9f23a-4a73-3bf4-7ee4-2384afbba418/_U753b_U677f_1.jpg/392x696bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/ef/37/d5/ef37d528-b639-46e6-077b-dc66cfa878ed/_U753b_U677f_1__U62f7_U8d1d.jpg/392x696bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/37/9f/c9/379fc97d-48a2-cca4-c48b-d34907cff178/_U753b_U677f_1__U62f7_U8d1d_2.jpg/392x696bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/cb/01/85/cb0185e1-1cb2-a0c5-d430-aa2c06c412bd/_U753b_U677f_1__U62f7_U8d1d_3.jpg/392x696bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/76/99/e6/7699e664-0135-6b46-a725-65d57f7afb04/_U753b_U677f_1__U62f7_U8d1d_4.jpg/392x696bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/37/2d/b4/372db41f-fa56-c40c-be2e-bcd384b3e321/_U753b_U677f_1__U62f7_U8d1d_5.jpg/392x696bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/e2/37/ef/e237ef61-b6f5-550e-3460-53fbb3600fa5/_U753b_U677f_1__U62f7_U8d1d_5.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/2d/07/b2/2d07b21d-4102-78c9-3c47-96b05b69db17/_U753b_U677f_1__U62f7_U8d1d_2.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/08/07/6f/08076f4f-9e60-3b65-f6ec-47d3b8c2e4a7/_U753b_U677f_1__U62f7_U8d1d_3.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/ef/35/61/ef356103-626e-d14f-6c04-c96c044fd765/_U753b_U677f_1__U62f7_U8d1d_4.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/02/14/fd/0214fd38-75a2-d083-9c5f-c62a7061791c/_U753b_U677f_1__U62f7_U8d1d.jpg/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/87/d0/65/87d06531-17df-06d7-5dc2-4aede33196fc/_U753b_U677f_1.jpg/360x480bb.jpg"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "af",
+                "am",
+                "ar",
+                "az",
+                "be",
+                "bn",
+                "bs",
+                "ca",
+                "cs",
+                "da",
+                "de",
+                "el",
+                "en",
+                "es",
+                "fa",
+                "fi",
+                "fr",
+                "gu",
+                "he",
+                "hi",
+                "hr",
+                "hu",
+                "id",
+                "is",
+                "it",
+                "ja",
+                "kk",
+                "km",
+                "kn",
+                "ko",
+                "lo",
+                "lt",
+                "mk",
+                "ml",
+                "mn",
+                "mr",
+                "ms",
+                "nb",
+                "ne",
+                "nl",
+                "pa",
+                "pl",
+                "pt",
+                "ro",
+                "ru",
+                "si",
+                "sk",
+                "sl",
+                "sr",
+                "sv",
+                "sw",
+                "ta",
+                "te",
+                "th",
+                "tl",
+                "tr",
+                "uk",
+                "ur",
+                "uz",
+                "vi",
+                "zh"
+            ],
+            "content_rating": "12+",
+            "rating": {
+                "value": 4.9,
+                "count": 1719272
+            },
+            "short_description": "Vita Mahjong – Free Mahjong Solitaire & Brain Game for Seniors! Relax, Train Your Brain, and Enjoy Classic Tile-Matching Fun! Looking for a…",
+            "description": "Vita Mahjong – Free Mahjong Solitaire & Brain Game for Seniors! \nRelax, Train Your Brain, and Enjoy Classic Tile-Matching Fun!\nLooking for a senior-friendly mahjong solitaire game with large tiles and easy controls? Vita Mahjong is the #1 offline puzzle game designed for older adults and casual players! Enjoy hundreds of levels, memory-boosting challenges, and a calming experience – perfect for tablets and phones!\nWhy 500,000+ Players Love Vita Mahjong:\n1.Classic Mahjong Solitaire – Traditional tile-matching gameplay with modern twists!\n2.Large, Clear Tiles – Reduce eye strain with senior-friendly design (No squinting!).\n3.Brain-Training Mode – Improve memory & focus with special cognitive puzzles!\n4.Play Offline, Anywhere – No Wi-Fi? No problem! Perfect for travel or relaxing at home.\n5.Daily Brain Exercises – New puzzles every day to keep your mind sharp!\n6.Hints & Undo – Stuck? Use smart tools to solve tough levels stress-free.\n7.Optimized for All Devices – Smooth gameplay on iPhone, iPad tablets!\n\nHow to Play (Simple Rules!):\n1.Tap Matching Tiles – Remove pairs of identical tiles.\n2.Clear the Board – Strategize to unlock blocked tiles!\n3.Level Up! – Puzzles get trickier as you progress – train your brain!\n\nPerfect For:\n1.Seniors & Elderly Players – Easy controls, no time limits, and large visible tiles.\n2.Casual Gamers – Relax and unwind with soothing puzzles.\n3.Brain Training Fans – Scientifically designed to boost memory and logic!\n\n---\nStay Connected & Safe\nSupport: support@vitastudio.ai\nPrivacy Policy: https://vitastudio.ai/pp.html\nTerms of Service: https://vitastudio.ai/tos.html\nEULA: https://vitastudio.ai/tos.html\nJoin 50k+ Players on Facebook: https://www.facebook.com/groups/vitastudio\nOfficial Website: https://www.vitastudio.ai/",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "3.39.1",
+            "versions": [
+                {
+                    "version": "3.39.1",
+                    "release_date": "2026-09-20",
+                    "size_mb": 391.2,
+                    "changelog": "-Bug fixes and performance improvements.",
+                    "download_url": "https://apps.apple.com/us/app/vita-mahjong/id6468921495?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Vita Mahjong v3.39.1 for iPhone and iPad",
+                "meta_description": "Vita Mahjong – free on the App Store. Latest version 3.39.1, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 10,
+            "slug": "cubeaway-3dpuzzle",
+            "type": "game",
+            "name": "CubeAway - 3DPuzzle",
+            "category": "action",
+            "developer": "GOODROID,Inc.",
+            "bundle_id": "jp.co.goodroid.hyper.puzzle.arrows3dcubepuzzle",
+            "app_store_id": "6760325543",
+            "app_store_url": "https://apps.apple.com/us/app/cubeaway-3dpuzzle/id6760325543?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/7e/99/d2/7e99d217-5a1c-489d-3af1-a53427fb4cb8/AppIcon-1x_U007emarketing-0-8-0-85-220-0.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/9c/4a/77/9c4a7726-b09f-7b92-3e19-703b065ba733/01.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/e2/b9/d0/e2b9d0e6-a2a2-add1-4d26-57ddf11156af/02.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/45/d9/c7/45d9c772-802f-437c-b54b-05ff48e7980a/03.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/7f/5c/be/7f5cbea2-25a3-a395-aba6-779101db3dfd/04.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/26/46/fe/2646fe0d-04c6-192b-4d52-87d083fc9f6f/05.png/392x696bb.png"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/e1/95/69/e1956979-1686-f838-907e-425008f1b8d6/12.9_01.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/1a/4b/48/1a4b4814-aca8-d0b8-dafb-53fe26a23903/12.9_02.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/de/04/00/de0400b9-7fbc-8ff5-9642-50ccdad4f8fe/12.9_03.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/f5/13/67/f51367a2-0686-8fbf-12d3-a810c98ed6ee/12.9_04.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/ae/38/07/ae380704-16f7-4daf-ad96-4fb97effb0ce/12.9_05.png/576x768bb.png"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "en"
+            ],
+            "content_rating": "12+",
+            "rating": {
+                "value": 4.66,
+                "count": 98077
+            },
+            "short_description": "Welcome to *CubeAway - 3DPuzzle*. Featuring a simple yet beautiful design, this logic puzzle game will test your thinking skills, concentration, and…",
+            "description": "Welcome to *CubeAway - 3DPuzzle*.\nFeaturing a simple yet beautiful design, this logic puzzle game will test your thinking skills, concentration, and creativity.\nCarefully navigate the intricately intertwined maze of arrows and remove them all without making a single mistake.\nEach stage presents a unique challenge that combines logical thinking, timing, and spatial awareness.\n\nEnjoy a rewarding puzzle experience that requires both intuition and strategic thinking.\n\nThe goal is simple, but you must never let your guard down.\nRemove the arrows in the correct order to clear them all from the cube.\nAnticipate your next move, visualize chain reactions, and discover the optimal sequence.\n\nWhether you’re a puzzle veteran or a beginner,\n“CubeAway - 3DPuzzle” delivers two distinct pleasures: the joy of thinking and a sense of calm tranquility.\n\nEach puzzle is a story that demands logic, patience, and precision.\nCan you remove all the arrows placed on the six sides?\n\nTest your mental agility in a quiet, beautiful world.\n“CubeAway - 3DPuzzle” will become your new “healing time for the mind.”",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "1.6.1",
+            "versions": [
+                {
+                    "version": "1.6.1",
+                    "release_date": "2026-09-09",
+                    "size_mb": 323.2,
+                    "changelog": "Get ready for the September Cube Pass!\nAdded new gimmicks.\nAdded Leagues—collect trophies and climb the ranks!",
+                    "download_url": "https://apps.apple.com/us/app/cubeaway-3dpuzzle/id6760325543?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "CubeAway - 3DPuzzle v1.6.1 for iPhone and iPad",
+                "meta_description": "CubeAway - 3DPuzzle – free on the App Store. Latest version 1.6.1, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 11,
+            "slug": "magic-sort",
+            "type": "game",
+            "name": "Magic Sort!",
+            "category": "casual",
+            "developer": "Grand Games A.Ş.",
+            "bundle_id": "com.grandgames.magicsort",
+            "app_store_id": "6499209744",
+            "app_store_url": "https://apps.apple.com/us/app/magic-sort/id6499209744?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/2e/96/c1/2e96c1d7-a5ec-c46d-87da-3fc742161f73/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/8c/af/c7/8cafc7f9-20d1-1ab3-fef2-bf5afd329a8f/MS_Store_1242x2208_StoreUI01_sort__U00281_U0029.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/3a/af/28/3aaf28b0-6400-4583-96a4-ebc91d584a30/MS_Store_1242x2208_StoreUI02_challenge.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/66/c7/a6/66c7a6f8-6942-a865-1fce-75ad21dd89ee/MS_Store_1242x2208_StoreUI03_win.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/34/f2/3e/34f23e04-6f9f-1883-16ca-e4898cf19dba/MS_Store_1242x2208_StoreUI04_earn.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/e8/b9/6c/e8b96cdd-1907-5675-4de6-dba7d0b35aeb/MS_Store_1242x2208_StoreUI05_enjoy.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/20/56/1c/20561c83-5b98-b468-6350-84e140c69f04/MS_Store_1242x2208_StoreUI06_relieve.png/392x696bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/7a/30/41/7a3041ea-bb82-95aa-0ac4-41c4a4023a81/MS_Store_1242x2208_StoreUI06_discover__U00281_U0029.png/392x696bb.png"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/4a/ba/78/4aba7803-acdb-e422-35f8-95b478dfb53c/MS_Store_2048x2732_StoreUI01_sort__U00281_U0029.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/0f/9b/12/0f9b12cb-a013-db68-69c8-18f1b3ad6dc2/MS_Store_2048x2732_StoreUI02_challenge.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/5c/eb/1e/5ceb1e64-4bd1-40cc-8102-143b505f2c5f/MS_Store_2048x2732_StoreUI03_win.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/04/41/66/04416601-f617-89f4-d8a4-79da509a928e/MS_Store_2048x2732_StoreUI04_earn.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/12/dc/ad/12dcadb8-1052-b5c1-2b92-b65c5346506c/MS_Store_2048x2732_StoreUI05_enjoy.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/39/ed/72/39ed72d9-492a-13b1-7ac1-018135b6221d/MS_Store_2048x2732_StoreUI07_relieve.png/576x768bb.png",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/82/24/70/82247004-00f3-152b-55a6-7a550279f20f/MS_Store_2048x2732_StoreUI06_Discover.png/576x768bb.png"
+            ],
+            "min_ios": "13.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "de",
+                "en",
+                "es",
+                "fr",
+                "it",
+                "ja",
+                "ko",
+                "nl",
+                "pt",
+                "ru",
+                "tr"
+            ],
+            "content_rating": "12+",
+            "rating": {
+                "value": 4.72,
+                "count": 653132
+            },
+            "short_description": "Discover Magic Sort! Mix colors in a world where every splash of water is a step into mystery. This isn’t just a game; it’s a journey through puzzles…",
+            "description": "Discover Magic Sort! Mix colors in a world where every splash of water is a step into mystery. This isn’t just a game; it’s a journey through puzzles that sparkle with charm, inviting you to sort, match, and puzzle your way through.\n\nQuick Play Guide\n\n- Start Simple: Tap a bottle to pick it up, and another to pour the water. Organize the water so each bottle has only one color.\n- Think Ahead: Pour water only if it matches the top color of the destination bottle and there’s room. Plan to avoid dead ends and strategically sort the colors.\n- Embrace Complexity: With each level, sorting and matching require more thought. Every move is crucial.\n- Utilize Magic Tools: Stuck? Use 'Undo' to reverse moves, or 'Shuffle' to rearrange the bottles anew, making sorting a breeze.\n\nCool Features\n\n- Spellbinding Levels: Each stage brings a fresh challenge of color sorting and magical fun.\n- Wizard’s Gear: Magic tools make your quest of water sorting smoother and way more fun.\n- Vivid Splashes: A riot of colors makes every move a delight, turning sorting into a visual feast.\n- Unique Twists: Classic puzzles get a magical makeover for extra thrill, blending color, water, and puzzle elements seamlessly.\n- Boosts & Surprises: Stir up boosts in the cauldron to power through puzzles, adding a layer of strategy to your color sorting.\n- Mystical Ingredients: Gather ingredients to brew stronger magic, enhancing your water sort adventures.\n\nWhy Play Magic Sort?\n\n- Sharpen Your Brain: Each puzzle is a fun test of wits, blending elements of color, water, and sorting into each challenge.\n- Chill Vibes: Dive into a soothing, colorful escape, where water and color sorting provide a tranquil experience.\n- Magic at Every Turn: New potions and surprises make every level an adventure in water, color, and puzzle-solving.\n\nGet Ready to Cast Some Color! \n\nDownload Magic Sort now and start your magical, colorful journey. The world of mystical puzzles, where water, sorting, and color converge, awaits!",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "31.63",
+            "versions": [
+                {
+                    "version": "31.63",
+                    "release_date": "2026-09-14",
+                    "size_mb": 601.2,
+                    "changelog": "Are you ready for a magical new update?\n\n-New 100 levels!\n-Bug Fixes & Improvements",
+                    "download_url": "https://apps.apple.com/us/app/magic-sort/id6499209744?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Magic Sort! v31.63 for iPhone and iPad",
+                "meta_description": "Magic Sort! – free on the App Store. Latest version 31.63, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 12,
+            "slug": "brain-puzzle-3-crazy-mind",
+            "type": "game",
+            "name": "Brain Puzzle 3: Crazy Mind",
+            "category": "puzzle",
+            "developer": "SmallStep Dev Team",
+            "bundle_id": "com.brain.crazy.joygame.ios",
+            "app_store_id": "6756482832",
+            "app_store_url": "https://apps.apple.com/us/app/brain-puzzle-3-crazy-mind/id6756482832?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/ed/f4/df/edf4df66-c8f5-e488-bc0d-7677aa8ea52d/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/49/76/0f/49760fb1-beda-34be-d075-2c8fcb50d062/L149_U00281_U0029.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/4f/c0/a0/4fc0a054-551e-67a2-9019-564d7b1ac997/level_114.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/41/eb/f6/41ebf621-71ef-1030-407b-4e4405b89e1b/level_23.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/0a/bd/e1/0abde1de-1693-8bae-47a9-032508d01340/L169.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/28/af/4c/28af4c70-c89c-476c-a689-d0a03c6a2820/level_148_U00281_U0029.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/70/ee/43/70ee43b9-a1e8-3aaf-52b9-68b7d40630ee/level_139.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/19/0c/ab/190cabb4-8fbb-619b-838b-c1ab9d06c93a/level_34.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/ef/00/f8/ef00f808-093a-4095-5283-95af98f9ac67/level_67.png/320x480bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/8d/ea/7c/8dea7c66-aefd-c45e-9ff8-dc707faa1305/L149_U00282_U0029.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/5e/04/3c/5e043c79-31e6-83d1-aabd-90f7f8780295/level_114.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/b1/26/05/b12605ca-e833-e94f-80aa-149ba1077de4/level_23.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/74/c4/23/74c423ab-322d-4471-230d-6522d4c626bc/L169_U00281_U0029.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/e5/77/7d/e5777d5f-4e18-0973-3af0-5e7b065aad6c/level_148.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/e7/c3/f0/e7c3f0e2-92b5-0c39-9a5e-cadc80181938/level_139_U00281_U0029.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/45/69/26/456926f4-a613-c972-615d-22079019c437/_U5173_U536134.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/b6/2b/64/b62b64c6-2f88-e8ca-711d-a5c32da98030/level_67.png/360x480bb.jpg"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "ar",
+                "de",
+                "en",
+                "es",
+                "fr",
+                "hi",
+                "id",
+                "ja",
+                "ko",
+                "ms",
+                "pt",
+                "ru",
+                "th",
+                "vi",
+                "zh"
+            ],
+            "content_rating": "12+",
+            "rating": {
+                "value": 4.67,
+                "count": 18961
+            },
+            "short_description": "Warning: This game may cause intermittent frustration, sudden bursts of laughter, and a strong desire to show off to your friends! Welcome to Brain…",
+            "description": "Warning: This game may cause intermittent frustration, sudden bursts of laughter, and a strong desire to show off to your friends!\n\nWelcome to Brain Puzzle 3: Crazy Mind, the newest adventure in the Brain Puzzle series!\n\nGet ready for an exciting Brain Puzzle game experience filled with creative challenges, tricky levels, and unexpected solutions. Brain Puzzle 3 brings you a collection of fun brain puzzle challenges, clever brain puzzle levels, and unique brain puzzle adventures designed to test your creativity, logic, and problem-solving skills.\n\nWhether you love brain puzzle games, logic games, visual puzzles, or brain teasers, Crazy Mind offers endless brain puzzle challenges that will keep your mind active and entertained.\n\nThink you're smart enough?\nTry Brain Puzzle 3 and discover how powerful your mind really is!\n\nGame Features:\n\nHundreds of Brain Puzzle Challenges:\nExplore a massive collection of brain puzzle levels, including logic puzzles, visual challenges, reaction tests, and creative thinking games. Every brain puzzle challenge is designed to surprise you and test your thinking skills.\n\nA New Generation of Brain Puzzle Games:\nBrain Puzzle 3 combines simple gameplay with clever designs, creating a relaxing yet challenging brain puzzle experience for players of all ages.\n\nCreative Brain Puzzle Adventure:\nEnjoy a variety of brain puzzle games featuring tricky questions, unexpected solutions, and imaginative puzzle designs. Each brain puzzle level brings a fresh challenge.\n\nTrain Your Brain Every Day:\nDevelop your observation, memory, logical thinking, and problem-solving abilities through fun brain puzzle games and exciting brain training challenges.\n\nPlay Anytime, Anywhere:\nEnjoy quick brain puzzle challenges whenever you want. A few minutes of Brain Puzzle 3 gameplay can give your mind an exciting workout.\n\nStop wasting time with endless scrolling!\nJoin millions of puzzle fans and start your Brain Puzzle 3 adventure today!\n\nDownload Brain Puzzle 3: Crazy Mind now and experience the ultimate brain puzzle game!\n\nContact Email: xiaobuinfo2019@gmail.com\nWebsite: https://www.smallstepinfo.com",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "1.1.2",
+            "versions": [
+                {
+                    "version": "1.1.2",
+                    "release_date": "2026-09-17",
+                    "size_mb": 321.9,
+                    "changelog": "• Fixed some bugs\n• Improved game stability",
+                    "download_url": "https://apps.apple.com/us/app/brain-puzzle-3-crazy-mind/id6756482832?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Brain Puzzle 3: Crazy Mind v1.1.2 for iPhone and iPad",
+                "meta_description": "Brain Puzzle 3: Crazy Mind – free on the App Store. Latest version 1.1.2, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        },
+        {
+            "id": 13,
+            "slug": "bus-traffic-fever",
+            "type": "game",
+            "name": "Bus Traffic Fever!",
+            "category": "casual",
+            "developer": "GOODROID,Inc.",
+            "bundle_id": "jp.co.goodroid.hyper.busflow",
+            "app_store_id": "6759763476",
+            "app_store_url": "https://apps.apple.com/us/app/bus-traffic-fever/id6759763476?uo=4",
+            "price": 0,
+            "icon": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/1b/08/c3/1b08c380-77f7-cb9e-a7ab-c815348d09d8/AppIcon-1x_U007emarketing-0-8-0-85-220-0.png/512x512bb.jpg",
+            "screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/1b/ef/df/1befdfa2-e1b9-e6a1-49bd-8115f93410f5/6.5inch__U00285_U0029.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/05/16/15/051615ff-ec40-97f6-b02b-8efbfa621673/6.5inch__U00284_U0029.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/d9/ca/c8/d9cac849-ee4b-2f50-a932-23a75dda2aeb/6.5inch__U00282_U0029.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/50/66/5b/50665b5f-06c1-0cfd-62f8-6d58be1e7c43/6.5inch__U00286_U0029.png/320x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/4a/69/72/4a697201-151c-6265-f38b-3fd3c707a9a4/6.5inch__U00287_U0029.png/320x480bb.jpg"
+            ],
+            "ipad_screenshots": [
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/88/db/4c/88db4c52-9c7d-9346-190a-12532d2f4d79/13inch__U00285_U0029.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/bb/28/07/bb280782-536a-3fb8-33d4-d257655cdcb2/13inch__U00284_U0029.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/fc/5b/f3/fc5bf3e1-d059-16a0-de80-9d223d52f765/13inch__U00283_U0029.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/cd/1b/72/cd1b720a-1466-22b0-6c42-b95d71dd0517/13inch__U00287_U0029.png/360x480bb.jpg",
+                "https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/0f/96/cc/0f96ccc0-c61c-047d-f315-14671310d367/13inch__U00286_U0029.png/360x480bb.jpg"
+            ],
+            "min_ios": "15.0",
+            "compatible": [
+                "iphone",
+                "ipad"
+            ],
+            "languages": [
+                "en"
+            ],
+            "content_rating": "12+",
+            "rating": {
+                "value": 4.69,
+                "count": 68818
+            },
+            "short_description": "Do you love solving challenging yet satisfying puzzles? Step into the world of Bus Traffic Fever! Bus Traffic Fever! combines the excitement of…",
+            "description": "Do you love solving challenging yet satisfying puzzles?\nStep into the world of Bus Traffic Fever!\n\nBus Traffic Fever! combines the excitement of parking games, the challenge of color-sorting games, and the satisfying people. Plan your moves to clear the parking lot congestion and make way for smooth traffic.\n\nMove, park, and collect—every decision matters in this parking jam puzzle.\n\nWhether you love car parking games, color-sorting games, or just brain teasers, this addictive puzzle game will keep you hooked.\n\nDownload “Bus Traffic Fever!” now and become a master!",
+            "tags": [],
+            "featured": {
+                "popular": false,
+                "editors_choice": false
+            },
+            "latest_version": "1.7.0",
+            "versions": [
+                {
+                    "version": "1.7.0",
+                    "release_date": "2026-09-14",
+                    "size_mb": 361.6,
+                    "changelog": "Bug Fix",
+                    "download_url": "https://apps.apple.com/us/app/bus-traffic-fever/id6759763476?uo=4"
+                }
+            ],
+            "seo": {
+                "title": "Bus Traffic Fever! v1.7.0 for iPhone and iPad",
+                "meta_description": "Bus Traffic Fever! – free on the App Store. Latest version 1.7.0, changelog, requirements and screenshots."
+            },
+            "status": "published",
+            "created_at": "2026-09-24T16:19:47Z",
+            "updated_at": "2026-09-24T16:24:35Z"
+        }
+    ]
+}

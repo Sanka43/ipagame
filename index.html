@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Download games and apps for iPhone and iPad.">
+  <title>Game Store</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <a class="brand" href="./">
+        <span class="brand-mark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15.5" cy="11" r=".6" fill="currentColor"/><circle cx="17.5" cy="13" r=".6" fill="currentColor"/></svg>
+        </span>
+        Game Store
+      </a>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <label class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search games and apps" autocomplete="off" aria-label="Search">
+    </label>
+    <nav class="chips" id="chips" aria-label="Filter"></nav>
+
+    <section id="featured"></section>
+
+    <section>
+      <h2 class="section-title"><span id="listTitle">All</span><small id="count"></small></h2>
+      <div class="list" id="list"><p class="empty">Loading…</p></div>
+    </section>
+  </main>
+
+  <footer class="foot">Game Store</footer>
+
+  <script src="assets/common.js"></script>
+  <script>
+    const $ = s => document.querySelector(s);
+    const state = { items: [], filter: 'all', q: '' };
+
+    function matches(it) {
+      const f = state.filter;
+      if (f.startsWith('type:') && it.type !== f.slice(5)) return false;
+      if (f.startsWith('cat:') && it.category !== f.slice(4)) return false;
+      if (state.q) {
+        const hay = [it.name, it.developer, it.category, it.short_description, ...(it.tags || [])].join(' ').toLowerCase();
+        if (!hay.includes(state.q)) return false;
+      }
+      return true;
+    }
+
+    function chipsHTML() {
+      const types = new Set(state.items.map(i => i.type));
+      const cats = [...new Set(state.items.map(i => i.category).filter(Boolean))].sort();
+      const chips = [['all', 'All']];
+      if (types.has('game')) chips.push(['type:game', 'Games']);
+      if (types.has('app')) chips.push(['type:app', 'Apps']);
+      cats.forEach(c => chips.push(['cat:' + c, catLabel(c)]));
+      return chips.map(([v, l]) =>
+        `<button class="chip${state.filter === v ? ' active' : ''}" data-f="${esc(v)}">${esc(l)}</button>`).join('');
+    }
+
+    const link = it => `game.html?slug=${encodeURIComponent(it.slug)}`;
+
+    function rowHTML(it) {
+      const meta = [catLabel(it.category), it.latest_version && 'v' + it.latest_version].filter(Boolean).join(' · ');
+      return `<a class="row" href="${link(it)}">
+        ${iconHTML(it)}
+        <div class="row-info">
+          <div class="row-name">${esc(it.name)}</div>
+          <div class="row-sub">${esc(it.short_description || it.developer || '')}</div>
+          <div class="row-sub">${esc(meta)}</div>
+        </div>
+        <span class="get">GET</span>
+      </a>`;
+    }
+
+    function featureHTML(it) {
+      const tag = it.featured?.editors_choice ? "Editors' Choice" : 'Popular';
+      return `<a class="feature" href="${link(it)}">
+        ${iconHTML(it)}
+        <div class="row-info">
+          <div class="tag">${tag}</div>
+          <div class="name">${esc(it.name)}</div>
+          <div class="blurb">${esc(it.short_description || catLabel(it.category))}</div>
+        </div>
+      </a>`;
+    }
+
+    function render() {
+      $('#chips').innerHTML = chipsHTML();
+
+      const featured = state.items.filter(i => i.featured?.popular || i.featured?.editors_choice);
+      const showFeatured = state.filter === 'all' && !state.q && featured.length;
+      $('#featured').innerHTML = showFeatured
+        ? `<h2 class="section-title">Featured</h2><div class="carousel">${featured.map(featureHTML).join('')}</div>`
+        : '';
+
+      const list = state.items.filter(matches);
+      const active = $('#chips .chip.active');
+      $('#listTitle').textContent = state.q ? 'Results' : (active ? active.textContent : 'All');
+      $('#count').textContent = list.length + (list.length === 1 ? ' item' : ' items');
+      $('#list').innerHTML = list.length
+        ? list.map(rowHTML).join('')
+        : `<p class="empty">${state.items.length ? 'Nothing matches your search.' : 'No games yet.'}</p>`;
+    }
+
+    $('#chips').addEventListener('click', e => {
+      const b = e.target.closest('.chip');
+      if (!b) return;
+      state.filter = b.dataset.f;
+      render();
+    });
+
+    $('#q').addEventListener('input', e => {
+      state.q = e.target.value.trim().toLowerCase();
+      render();
+    });
+
+    api('list')
+      .then(r => { state.items = r.items; render(); })
+      .catch(err => { $('#list').innerHTML = `<p class="empty">Could not load games: ${esc(err.message)}</p>`; });
+  </script>
+</body>
+</html>
