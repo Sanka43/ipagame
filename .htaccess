@@ -1,0 +1,7 @@
+# Pages must be rechecked on every visit so phones pick up new ?v= asset links right away;
+# the versioned CSS/JS they point at can stay cached.
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

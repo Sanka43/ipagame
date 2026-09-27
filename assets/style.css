@@ -338,7 +338,7 @@ dialog.sheet form { display: flex; flex-direction: column; height: 100%; }
 .hero-card:active { transform: scale(.985); }
 .hero-slider { position: relative; }
 .hero-track {
-  display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: 12px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: 16px;
   overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
   margin: 0 -16px; padding: 0 16px 22px; scroll-padding: 16px;
 }
