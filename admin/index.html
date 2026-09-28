@@ -8,7 +8,7 @@
   <link rel="icon" href="../assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="../assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css?v=20260927b">
+  <link rel="stylesheet" href="../assets/style.css?v=20260928a">
 </head>
 <body>
   <!-- Login -->
@@ -18,7 +18,7 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
       </span>
       <h1>Admin login</h1>
-      <p class="muted" style="margin:0 0 18px">Manage games in the store.</p>
+      <p class="muted" style="margin:0 0 18px">Manage games and users in the store.</p>
       <div class="field">
         <label class="label" for="username">Username</label>
         <input class="input" id="username" name="username" autocomplete="username" required>
@@ -46,6 +46,12 @@
     </header>
 
     <main class="wrap" style="padding-bottom:40px">
+      <nav class="admin-tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" data-pane="games" aria-selected="true">Games</button>
+        <button type="button" role="tab" data-pane="users" aria-selected="false">Users <span class="tab-n" id="usersCount"></span></button>
+      </nav>
+
+      <section id="gamesPane">
       <div class="stat-cards" id="stats"></div>
 
       <div class="toolbar">
@@ -66,6 +72,26 @@
         <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
         <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
       </div>
+      </section>
+
+      <!-- Store users -->
+      <section id="usersPane" hidden>
+        <div class="stat-cards" id="uStats"></div>
+        <div class="toolbar">
+          <label class="search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="uq" type="search" placeholder="Search username or email" autocomplete="off" aria-label="Search users">
+          </label>
+          <select class="input u-filter" id="uFilter" aria-label="Filter users">
+            <option value="">All</option>
+            <option value="verified">Verified</option>
+            <option value="unverified">Unverified</option>
+            <option value="disabled">Disabled</option>
+            <option value="new">New (7 days)</option>
+          </select>
+        </div>
+        <div class="admin-list" id="uList"></div>
+      </section>
     </main>
   </div>
 
@@ -161,8 +187,50 @@
     </form>
   </dialog>
 
+  <!-- Manage user sheet -->
+  <dialog class="sheet user-sheet" id="userSheet">
+    <form id="userForm" novalidate>
+      <div class="sheet-head">
+        <h2 id="uTitle">User</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div class="u-head">
+          <span class="u-avatar lg" id="uAvatar"></span>
+          <div class="row-info">
+            <div class="row-name" id="uName"></div>
+            <div class="row-sub" id="uEmailLine"></div>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="u-username">Username</label>
+            <input class="input" id="u-username" name="username" maxlength="30" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label class="label" for="u-email">Email</label>
+            <input class="input" id="u-email" name="email" type="email" maxlength="190" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="card u-facts" id="uFacts"></div>
+        <div class="checks" style="margin-top:14px">
+          <label class="check"><input type="checkbox" name="verified"> Email verified</label>
+          <label class="check"><input type="checkbox" name="disabled"> Account disabled <span class="muted" style="font-size:13px">(can&#39;t sign in)</span></label>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button type="button" class="btn danger" id="uDelete">Delete</button>
+        <p class="error" id="uError" style="flex:1;margin:0"></p>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn" id="uSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>window.API_BASE = '../';</script>
-  <script src="../assets/common.js?v=20260927b"></script>
+  <script src="../assets/common.js?v=20260928a"></script>
   <script>
     const $ = s => document.querySelector(s);
     const form = $('#editForm');
@@ -179,6 +247,8 @@
     async function showDash() {
       $('#loginView').hidden = true;
       $('#dashView').hidden = false;
+      showPane(location.hash === '#users' ? 'users' : 'games');
+      if (!usersLoaded && location.hash !== '#users') refreshUsers();
       await refresh();
     }
 
@@ -231,10 +301,10 @@
       const q = $('#q').value.trim().toLowerCase();
       const list = items.filter(i => !q || [i.name, i.developer, i.category].join(' ').toLowerCase().includes(q));
       $('#list').innerHTML = list.length ? list.map(it => {
-        const n = it.versions?.length || 0;
+        const n = it.versions_count || 0;
         const meta = [it.type === 'app' ? 'App' : 'Game', catLabel(it.category), it.latest_version && 'v' + String(it.latest_version).replace(/^v/i, ''), `${n} version${n === 1 ? '' : 's'}`]
           .filter(Boolean).join(' · ');
-        const dl = it.versions?.[0]?.download_url || '';
+        const dl = it.download_url || '';
         return `<div class="row">
           ${iconHTML(it, 'sm')}
           <div class="row-info">
@@ -255,7 +325,14 @@
     $('#list').addEventListener('click', async e => {
       const edit = e.target.closest('[data-edit]');
       const del = e.target.closest('[data-del]');
-      if (edit) openEditor(items.find(i => String(i.id) === edit.dataset.edit));
+      if (edit) {
+        // The list only has summary rows; load the whole game (versions, description) to edit it.
+        edit.disabled = true;
+        try {
+          openEditor((await api('get', { params: { id: edit.dataset.edit } })).item);
+        } catch (err) { handleError(err); }
+        finally { edit.disabled = false; }
+      }
       if (del) {
         const it = items.find(i => String(i.id) === del.dataset.del);
         if (!it || !confirm(`Delete "${it.name}"? This cannot be undone.`)) return;
@@ -384,6 +461,157 @@
         else $('#editError').textContent = err.message;
       } finally {
         btn.disabled = false;
+      }
+    });
+
+    /* ---------- Store users ---------- */
+    let users = [];
+    let usersLoaded = false;
+    const uForm = $('#userForm');
+    const uSheet = $('#userSheet');
+    const DAY = 86400000;
+
+    function showPane(name) {
+      document.querySelectorAll('.admin-tabs [data-pane]').forEach(b => b.setAttribute('aria-selected', b.dataset.pane === name));
+      $('#gamesPane').hidden = name !== 'games';
+      $('#usersPane').hidden = name !== 'users';
+      history.replaceState(null, '', name === 'users' ? '#users' : location.pathname);
+      if (name === 'users' && !usersLoaded) refreshUsers();
+    }
+    $('.admin-tabs').addEventListener('click', e => {
+      const b = e.target.closest('[data-pane]');
+      if (b) showPane(b.dataset.pane);
+    });
+
+    async function refreshUsers() {
+      if (!usersLoaded) $('#uList').innerHTML = $('#list .skel-card')?.outerHTML.repeat(4) || '';
+      try {
+        users = (await api('admin_users')).users;
+        usersLoaded = true;
+        renderUsers();
+      } catch (err) { handleError(err); }
+    }
+
+    // "3 Oct 2026" / "5 min ago" style dates.
+    function ago(iso) {
+      if (!iso) return '';
+      const ms = Date.now() - new Date(iso);
+      if (ms < 60000) return 'just now';
+      if (ms < 3600000) return Math.floor(ms / 60000) + ' min ago';
+      if (ms < DAY) return Math.floor(ms / 3600000) + ' h ago';
+      if (ms < 7 * DAY) return Math.floor(ms / DAY) + ' d ago';
+      return fmtDate(iso.slice(0, 10));
+    }
+
+    const isNew = u => Date.now() - new Date(u.created_at) < 7 * DAY;
+    const FILTERS = {
+      '': () => true,
+      verified: u => u.verified_at,
+      unverified: u => !u.verified_at,
+      disabled: u => u.disabled_at,
+      new: isNew,
+    };
+
+    function userBadges(u) {
+      return (u.disabled_at ? '<span class="badge danger">Disabled</span>' : '') +
+        (!u.verified_at ? '<span class="badge draft">Unverified</span>' : '');
+    }
+
+    function renderUsers() {
+      const count = f => users.filter(f).length;
+      $('#usersCount').textContent = users.length;
+      $('#uStats').innerHTML = [
+        ['Users', users.length],
+        ['Verified', count(FILTERS.verified)],
+        ['New this week', count(isNew)],
+        ['Disabled', count(FILTERS.disabled)],
+      ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
+
+      const q = $('#uq').value.trim().toLowerCase();
+      const list = users.filter(FILTERS[$('#uFilter').value])
+        .filter(u => !q || (u.username + ' ' + u.email).toLowerCase().includes(q));
+      $('#uList').innerHTML = list.length ? list.map(u => `<div class="row${u.disabled_at ? ' is-disabled' : ''}">
+          <span class="u-avatar">${avatarHTML(u)}</span>
+          <div class="row-info">
+            <div class="row-name">${esc(u.username)} ${userBadges(u)}</div>
+            <div class="row-sub">${esc(u.email)}</div>
+            <div class="row-sub">Joined ${esc(ago(u.created_at))} · ${u.last_login_at ? 'Last sign-in ' + esc(ago(u.last_login_at)) : 'Never signed in'}</div>
+          </div>
+          <div class="row-actions"><button class="btn sm ghost" data-user="${u.id}">Manage</button></div>
+        </div>`).join('')
+        : `<p class="empty">${users.length ? 'No users match.' : 'No one has signed up yet.'}</p>`;
+    }
+
+    $('#uq').addEventListener('input', renderUsers);
+    $('#uFilter').addEventListener('change', renderUsers);
+
+    let editing = null;
+    function openUser(u) {
+      editing = u;
+      uForm.reset();
+      $('#uError').textContent = '';
+      $('#uTitle').textContent = u.username;
+      $('#uAvatar').innerHTML = avatarHTML(u);
+      $('#uName').innerHTML = esc(u.username) + ' ' + userBadges(u);
+      $('#uEmailLine').textContent = u.email;
+      const f = uForm.elements;
+      f.username.value = u.username;
+      f.email.value = u.email;
+      f.verified.checked = !!u.verified_at;
+      f.disabled.checked = !!u.disabled_at;
+      const when = iso => iso ? `${fmtDate(iso.slice(0, 10))} <span class="muted">(${esc(ago(iso))})</span>` : '<span class="muted">—</span>';
+      $('#uFacts').innerHTML = [
+        ['User ID', '#' + u.id],
+        ['Joined', when(u.created_at)],
+        ['Last sign-in', u.last_login_at ? when(u.last_login_at) : '<span class="muted">Never</span>'],
+        ['Email verified', u.verified_at ? when(u.verified_at) : '<span class="muted">Not yet</span>'],
+        ['Disabled', u.disabled_at ? when(u.disabled_at) : '<span class="muted">No</span>'],
+      ].map(([k, v]) => `<div><span class="muted">${k}</span><span>${v}</span></div>`).join('');
+      uSheet.showModal();
+    }
+
+    $('#uList').addEventListener('click', e => {
+      const b = e.target.closest('[data-user]');
+      if (b) openUser(users.find(u => String(u.id) === b.dataset.user));
+    });
+    uSheet.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => uSheet.close()));
+
+    uForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const f = uForm.elements;
+      // Send only what changed.
+      const change = { id: editing.id };
+      if (f.username.value.trim() !== editing.username) change.username = f.username.value.trim();
+      if (f.email.value.trim().toLowerCase() !== editing.email) change.email = f.email.value.trim();
+      if (f.verified.checked !== !!editing.verified_at) change.verified = f.verified.checked;
+      if (f.disabled.checked !== !!editing.disabled_at) change.disabled = f.disabled.checked;
+      if (Object.keys(change).length === 1) { uSheet.close(); return; }
+      if (change.disabled && !confirm(`Disable ${editing.username}? They will be signed out and can't sign in until you enable the account again.`)) return;
+      $('#uSave').disabled = true;
+      $('#uError').textContent = '';
+      try {
+        await api('admin_user_update', { body: change });
+        uSheet.close();
+        toast('Saved');
+        await refreshUsers();
+      } catch (err) {
+        if (err.status === 401) { uSheet.close(); showLogin(); }
+        else $('#uError').textContent = err.message;
+      } finally {
+        $('#uSave').disabled = false;
+      }
+    });
+
+    $('#uDelete').addEventListener('click', async () => {
+      if (!confirm(`Delete ${editing.username} (${editing.email})? Their account is removed for good and this cannot be undone.`)) return;
+      try {
+        await api('admin_user_delete', { body: { id: editing.id } });
+        uSheet.close();
+        toast('User deleted');
+        await refreshUsers();
+      } catch (err) {
+        if (err.status === 401) { uSheet.close(); showLogin(); }
+        else $('#uError').textContent = err.message;
       }
     });
 

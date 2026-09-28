@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+$https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? '') === '443';
+ini_set('session.use_strict_mode', '1');
+session_set_cookie_params(['path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => $https]);
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -17,6 +20,20 @@ define('DB', (array)($config['db'] ?? []) + ['host' => '127.0.0.1', 'name' => 'i
 // Public URL of this site without trailing slash; empty = auto-detect. Uploaded icons are stored
 // as absolute URLs so the other site can show them too.
 define('SITE_URL', rtrim((string)($config['site_url'] ?? ''), '/'));
+// SMTP mailbox that sends verification emails (see config.example.php). Missing = write to data/mail/ (dev).
+define('MAIL', (array)($config['mail'] ?? []) + ['from' => 'info@ipagame.store', 'from_name' => 'Game Store']);
+require __DIR__ . '/mailer.php';
+
+const VERIFY_TTL = 15 * 60;      // a code is valid for 15 minutes
+const VERIFY_RESEND = 60;        // at most one email per minute
+const VERIFY_TRIES = 5;          // wrong guesses before a new code is needed
+
+// Per-IP / per-address limits as [max, window seconds] (table rate_hits, see sql/rate_limits.sql).
+const LIMIT_LOGIN_FAILS = [10, 15 * 60];   // wrong store passwords per IP
+const LIMIT_ADMIN_FAILS = [5, 15 * 60];    // wrong admin passwords per IP
+const LIMIT_SIGNUPS = [5, 60 * 60];        // new accounts per IP
+const LIMIT_MAIL_IP = [10, 60 * 60];       // code emails requested per IP
+const LIMIT_MAIL_TO = [5, 60 * 60];        // code emails to one address
 
 // Store categories — offered in the admin panel even before any item uses them.
 const CATEGORIES = [
@@ -45,6 +62,203 @@ function is_admin(): bool
 function require_admin(): void
 {
     if (!is_admin()) throw new ApiError('Not logged in', 401);
+}
+
+/** The logged-in store user (public fields only), or null. */
+function current_user(): ?array
+{
+    if (empty($_SESSION['user_id'])) return null;
+    $st = db()->prepare('SELECT id, username, email, created_at, disabled_at, email_verified_at FROM users WHERE id=?');
+    $st->execute([$_SESSION['user_id']]);
+    $u = $st->fetch();
+    // Deleted, disabled or un-verified by an admin: signed out at once.
+    if (!$u || $u['disabled_at'] || !$u['email_verified_at']) {
+        unset($_SESSION['user_id']);
+        return null;
+    }
+    return ['id' => (int)$u['id'], 'username' => $u['username'], 'email' => $u['email'], 'created_at' => iso_date($u['created_at']),
+            'avatar' => gravatar_url($u['email'])];
+}
+
+// Profile picture linked to the email on gravatar.com; d=404 lets the page fall back to the initial.
+function gravatar_url(string $email): string
+{
+    return 'https://gravatar.com/avatar/' . hash('sha256', strtolower(trim($email))) . '?s=160&d=404';
+}
+
+// The store is members-only: browsing needs a logged-in user (or the admin, for the panel).
+function require_member(): void
+{
+    if (!is_admin() && !current_user()) throw new ApiError('Login required', 401);
+}
+
+function login_user(int $id): void
+{
+    session_regenerate_id(true);
+    $_SESSION['user_id'] = $id;
+    unset($_SESSION['pending_user_id']);
+    db()->prepare('UPDATE users SET last_login_at=UTC_TIMESTAMP() WHERE id=?')->execute([$id]);
+}
+
+// REMOTE_ADDR only: forwarded-for headers are set by the client and can't be trusted here.
+function client_ip(): string
+{
+    return (string)($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+}
+
+/** Throws a 429 once $key has been hit $limit[0] times within the last $limit[1] seconds. */
+function rate_check(string $key, array $limit, string $message): void
+{
+    [$max, $window] = $limit;
+    $st = db()->prepare('SELECT COUNT(*) FROM rate_hits WHERE k=? AND t > UTC_TIMESTAMP() - INTERVAL ? SECOND');
+    $st->execute([$key, $window]);
+    if ((int)$st->fetchColumn() >= $max) throw new ApiError($message, 429);
+}
+
+function rate_hit(string $key): void
+{
+    db()->prepare('INSERT INTO rate_hits (k, t) VALUES (?, UTC_TIMESTAMP())')->execute([$key]);
+    // Now and then, forget hits older than any window.
+    if (random_int(1, 50) === 1) db()->exec('DELETE FROM rate_hits WHERE t < UTC_TIMESTAMP() - INTERVAL 1 DAY');
+}
+
+function throttle_login(): void
+{
+    rate_check('login:' . client_ip(), LIMIT_LOGIN_FAILS, 'Too many sign-in attempts. Try again in 15 minutes.');
+}
+
+function login_failed(): void
+{
+    rate_hit('login:' . client_ip());
+    throw new ApiError('Wrong username or password', 401);
+}
+
+function check_mail_ip(): void
+{
+    rate_check('mail-ip:' . client_ip(), LIMIT_MAIL_IP, 'Too many emails requested from your network. Try again later.');
+}
+
+/** The account waiting for its email code in this session (right after register / sign-in), or null. */
+function pending_user(): ?array
+{
+    if (empty($_SESSION['pending_user_id'])) return null;
+    $st = db()->prepare('SELECT * FROM users WHERE id=? AND email_verified_at IS NULL');
+    $st->execute([$_SESSION['pending_user_id']]);
+    $u = $st->fetch();
+    if (!$u) unset($_SESSION['pending_user_id']);
+    return $u ?: null;
+}
+
+// Emailed 6-digit codes. Two kinds, each with its own columns: 'verify' (confirm the email after
+// sign-up) and 'reset' (forgot password). The code is stored hashed and expires after VERIFY_TTL.
+const CODE_KINDS = ['verify', 'reset'];
+
+/** Seconds until another code of this kind may be emailed to this account (0 = now). */
+function resend_wait(array $u, string $kind = 'verify'): int
+{
+    $sent = $u["{$kind}_sent_at"] ? strtotime($u["{$kind}_sent_at"] . ' UTC') : 0;
+    return max(0, $sent + VERIFY_RESEND - time());
+}
+
+/** Puts an unverified account in the session's "enter your code" step and emails a code if allowed. */
+function start_verification(array $u): array
+{
+    session_regenerate_id(true);
+    unset($_SESSION['user_id']);
+    $_SESSION['pending_user_id'] = (int)$u['id'];
+    $error = null;
+    try {
+        $sent = resend_wait($u) === 0 ? send_code($u, 'verify') : null;
+    } catch (ApiError $e) {                               // an email limit: still go to the code step
+        $sent = false;
+        $error = $e->getMessage();
+    }
+    // sent: true = new code emailed, false = email failed, null = an earlier code (under a minute old) still stands.
+    return ['verify' => true, 'email' => $u['email'], 'sent' => $sent, 'error' => $error,
+            'resend_in' => $sent === null ? resend_wait($u) : ($sent ? VERIFY_RESEND : 0)];
+}
+
+/** Throws unless $code is the account's current, unexpired code of this kind; counts wrong guesses. */
+function check_code(array $u, string $kind, string $code): void
+{
+    if (!in_array($kind, CODE_KINDS, true)) throw new LogicException("bad code kind $kind");
+    if (strlen($code) !== 6) throw new ApiError('Enter the 6-digit code', 422);
+    if (!$u["{$kind}_code_hash"] || strtotime($u["{$kind}_expires_at"] . ' UTC') < time()) {
+        throw new ApiError('This code has expired. Tap “Resend code” for a new one.', 410);
+    }
+    if ($u["{$kind}_attempts"] >= VERIFY_TRIES) throw new ApiError('Too many wrong codes. Tap “Resend code” for a new one.', 429);
+    if (!password_verify($code, $u["{$kind}_code_hash"])) {
+        db()->prepare("UPDATE users SET {$kind}_attempts={$kind}_attempts+1 WHERE id=?")->execute([$u['id']]);
+        $left = VERIFY_TRIES - $u["{$kind}_attempts"] - 1;
+        throw new ApiError($left > 0 ? "That code isn't right. $left " . ($left === 1 ? 'try' : 'tries') . ' left.'
+                                     : 'Too many wrong codes. Tap “Resend code” for a new one.', 422);
+    }
+}
+
+/** Emails a fresh 6-digit code of this kind (replacing any earlier one). Returns whether the email went out. */
+function send_code(array $u, string $kind): bool
+{
+    if (!in_array($kind, CODE_KINDS, true)) throw new LogicException("bad code kind $kind");
+    check_mail_ip();
+    rate_check('mail-to:' . $u['email'], LIMIT_MAIL_TO, 'Too many codes were sent to this email. Try again in an hour.');
+    $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    db()->prepare("UPDATE users SET {$kind}_code_hash=?, {$kind}_expires_at=UTC_TIMESTAMP() + INTERVAL ? SECOND,
+                   {$kind}_sent_at=UTC_TIMESTAMP(), {$kind}_attempts=0 WHERE id=?")
+        ->execute([password_hash($code, PASSWORD_DEFAULT), VERIFY_TTL, $u['id']]);
+
+    $copy = $kind === 'reset' ? [
+        'subject' => "$code is your Game Store password reset code",
+        'title' => 'Reset your password',
+        'intro' => 'enter this code to choose a new password.',
+        'ignore' => "If you didn't ask to reset your password, you can ignore this email. Your password won't change.",
+    ] : [
+        'subject' => "$code is your Game Store verification code",
+        'title' => 'Verify your email address',
+        'intro' => 'enter this code to finish setting up your account.',
+        'ignore' => "If you didn't create a Game Store account, you can ignore this email.",
+    ];
+    $name = htmlspecialchars($u['username'], ENT_QUOTES);
+    $mins = VERIFY_TTL / 60;
+    $text = "Hi {$u['username']},\n\n" . ucfirst($copy['intro']) . "\n\n    $code\n\n"
+          . "The code expires in $mins minutes.\n\n{$copy['ignore']}\n\n— Game Store\n" . (SITE_URL !== '' ? SITE_URL . "/\n" : '');
+    $html = <<<HTML
+<!doctype html>
+<html><body style="margin:0;padding:0;background:#f4f5f7">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 12px">
+<tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111418">
+    <tr><td style="padding:32px 32px 8px;text-align:center">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7c3aed">Game Store</div>
+      <h1 style="margin:14px 0 6px;font-size:24px;line-height:1.25">{$copy['title']}</h1>
+      <p style="margin:0;font-size:15px;line-height:1.5;color:#6b7280">Hi $name, {$copy['intro']}</p>
+    </td></tr>
+    <tr><td style="padding:22px 32px;text-align:center">
+      <div style="display:inline-block;padding:14px 22px;border-radius:14px;background:#f1edff;font-size:34px;font-weight:800;letter-spacing:.3em;color:#111418;font-family:'SF Mono',Menlo,Consolas,monospace">$code</div>
+      <p style="margin:14px 0 0;font-size:13px;color:#6b7280">This code expires in $mins minutes.</p>
+    </td></tr>
+    <tr><td style="padding:8px 32px 30px;text-align:center;font-size:13px;line-height:1.5;color:#9ca3af">
+      {$copy['ignore']}
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body></html>
+HTML;
+    $ok = send_mail(MAIL, $u['email'], $copy['subject'], $text, $html);
+    if ($ok) {
+        rate_hit('mail-ip:' . client_ip());
+        rate_hit('mail-to:' . $u['email']);
+    }
+    return $ok;
+}
+
+/** The account named by the email in this session's forgot-password step, or null. */
+function reset_user(): ?array
+{
+    if (empty($_SESSION['reset_email'])) return null;
+    $st = db()->prepare('SELECT * FROM users WHERE email=?');
+    $st->execute([$_SESSION['reset_email']]);
+    return $st->fetch() ?: null;
 }
 
 // Admin writes must be POST and carry a custom header (blocks simple cross-site form posts).
@@ -143,7 +357,18 @@ function group_by_game(string $sql): array
     return $out;
 }
 
-/** All items, newest first. $full adds descriptions, versions and screenshots (admin panel). */
+/** Admin list rows: just what the list shows. The editor loads one full item with 'get'. */
+function fetch_admin_rows(): array
+{
+    $rows = db()->query('SELECT g.id, g.slug, g.type, g.name, g.developer, g.category, g.icon, g.latest_version, g.status,
+                                (SELECT COUNT(*) FROM game_versions v WHERE v.game_id = g.id) AS versions_count,
+                                (SELECT v.download_url FROM game_versions v WHERE v.game_id = g.id ORDER BY v.id LIMIT 1) AS download_url
+                         FROM games g ORDER BY g.updated_at DESC, g.id DESC')->fetchAll();
+    return array_map(fn($r) => ['id' => (int)$r['id'], 'versions_count' => (int)$r['versions_count'],
+                                'download_url' => (string)$r['download_url']] + $r, $rows);
+}
+
+/** All items, newest first. $full adds descriptions, versions and screenshots. */
 function fetch_items(bool $all, bool $full): array
 {
     $cols = $full ? '*' : 'id, slug, type, name, developer, category, icon, short_description, latest_version,
@@ -338,9 +563,13 @@ function matches_filters(array $i, string $type, string $cat, string $q): bool
 try {
     switch ($_GET['action'] ?? '') {
         case 'list':
+            require_member();
             $all = is_admin() && !empty($_GET['all']);
-            // No page param: full list (admin panel).
-            if (!isset($_GET['page'])) respond(['items' => fetch_items($all, true), 'categories' => CATEGORIES]);
+            // No page param: the admin panel's list.
+            if (!isset($_GET['page'])) {
+                require_admin();
+                respond(['items' => fetch_admin_rows(), 'categories' => CATEGORIES]);
+            }
             $items = fetch_items($all, false);
 
             $type = (string)($_GET['type'] ?? '');
@@ -394,6 +623,7 @@ try {
             ]);
 
         case 'get':
+            require_member();
             $id = isset($_GET['id']) ? (int)$_GET['id'] : null;
             $slug = isset($_GET['slug']) ? (string)$_GET['slug'] : null;
             $item = find_item($id, $slug);
@@ -401,15 +631,155 @@ try {
             respond(['item' => $item]);
 
         case 'me':
-            respond(['admin' => is_admin()]);
+            $pending = pending_user();
+            respond(['admin' => is_admin(), 'user' => current_user(),
+                     'pending' => $pending ? ['email' => $pending['email'], 'resend_in' => resend_wait($pending)] : null]);
+
+        case 'register':
+            require_post();
+            $b = body();
+            $username = trim((string)($b['username'] ?? ''));
+            $email = mb_strtolower(trim((string)($b['email'] ?? '')));
+            $pass = (string)($b['password'] ?? '');
+            if (!preg_match('/^[A-Za-z0-9_]{3,30}$/', $username)) throw new ApiError('Username: 3–30 letters, numbers or _', 422);
+            if (strlen($email) > 190 || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new ApiError('Enter a valid email', 422);
+            if (strlen($pass) < 8) throw new ApiError('Password must be at least 8 characters', 422);
+            if (strlen($pass) > 72) throw new ApiError('Password is too long', 422);
+            rate_check('signup:' . client_ip(), LIMIT_SIGNUPS, 'Too many new accounts from your network. Try again later.');
+            check_mail_ip();
+            // Sign-ups never confirmed within a day give their username and email back.
+            db()->exec('DELETE FROM users WHERE email_verified_at IS NULL AND created_at < UTC_TIMESTAMP() - INTERVAL 1 DAY');
+            $st = db()->prepare('SELECT username=? AS same_name FROM users WHERE username=? OR email=? LIMIT 1');
+            $st->execute([$username, $username, $email]);
+            if ($row = $st->fetch()) throw new ApiError($row['same_name'] ? 'That username is taken' : 'That email is already registered', 409);
+            db()->prepare('INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, UTC_TIMESTAMP())')
+                ->execute([$username, $email, password_hash($pass, PASSWORD_DEFAULT)]);
+            $newId = (int)db()->lastInsertId();              // read before rate_hit() inserts its own row
+            rate_hit('signup:' . client_ip());
+            $st = db()->prepare('SELECT * FROM users WHERE id=?');
+            $st->execute([$newId]);
+            respond(start_verification($st->fetch()));
+
+        case 'user_login':
+            require_post();
+            throttle_login();
+            $b = body();
+            $login = trim((string)($b['login'] ?? ''));
+            $st = db()->prepare('SELECT * FROM users WHERE username=? OR email=? LIMIT 1');
+            $st->execute([$login, mb_strtolower($login)]);
+            $u = $st->fetch();
+            if (!$u || !password_verify((string)($b['password'] ?? ''), $u['password_hash'])) login_failed();
+            if (password_needs_rehash($u['password_hash'], PASSWORD_DEFAULT)) {
+                db()->prepare('UPDATE users SET password_hash=? WHERE id=?')
+                    ->execute([password_hash((string)$b['password'], PASSWORD_DEFAULT), $u['id']]);
+            }
+            if ($u['disabled_at']) throw new ApiError('This account has been disabled. Contact support if you think this is a mistake.', 403);
+            // Right password but the email was never confirmed: ask for the code first.
+            if (!$u['email_verified_at']) respond(start_verification($u));
+            login_user((int)$u['id']);
+            respond(['user' => current_user()]);
+
+        case 'verify_email':
+            require_post();
+            $u = pending_user() ?? throw new ApiError('Your session expired. Sign in again.', 440);
+            check_code($u, 'verify', preg_replace('/\D/', '', (string)(body()['code'] ?? '')));
+            db()->prepare('UPDATE users SET email_verified_at=UTC_TIMESTAMP(), verify_code_hash=NULL, verify_expires_at=NULL,
+                           verify_attempts=0 WHERE id=?')->execute([$u['id']]);
+            login_user((int)$u['id']);
+            respond(['user' => current_user()]);
+
+        case 'resend_code':
+            require_post();
+            $u = pending_user() ?? throw new ApiError('Your session expired. Sign in again.', 440);
+            if ($wait = resend_wait($u)) throw new ApiError("Wait $wait s before asking for another code.", 429);
+            if (!send_code($u, 'verify')) throw new ApiError("We couldn't send the email right now. Try again in a minute.", 502);
+            respond(['ok' => true, 'resend_in' => VERIFY_RESEND]);
+
+        // Forgot password, step 1: email a reset code. The reply is the same whether or not the email
+        // has an account, so this can't be used to find out who is registered.
+        case 'forgot_password':
+            require_post();
+            $email = mb_strtolower(trim((string)(body()['email'] ?? '')));
+            if (strlen($email) > 190 || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new ApiError('Enter a valid email', 422);
+            check_mail_ip();                                 // same for every address, so it reveals nothing
+            $_SESSION['reset_email'] = $email;
+            $u = reset_user();
+            if ($u && $u['disabled_at']) $u = null;        // disabled accounts get the same reply but no email
+            $wait = $u ? resend_wait($u, 'reset') : 0;
+            $reply = ['ok' => true, 'email' => $email, 'resend_in' => $wait ?: VERIFY_RESEND];
+            if (!$u || $wait) respond($reply);
+            $send = function () use ($u) {
+                try {
+                    if (!send_code($u, 'reset')) error_log("reset email to user {$u['id']} failed");
+                } catch (ApiError $e) {
+                    // Per-address limit reached: stay silent so the reply matches unknown emails.
+                }
+            };
+            // On PHP-FPM (cPanel) answer first and send afterwards, so a slow mail server can't hint
+            // that this email has an account.
+            if (function_exists('fastcgi_finish_request')) {
+                http_response_code(200);
+                echo json_encode($reply, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                session_write_close();
+                fastcgi_finish_request();
+                $send();
+                exit;
+            }
+            $send();
+            respond($reply);
+
+        // Step 2: the code plus a new password. Also counts as proof the email is theirs.
+        case 'reset_password':
+            require_post();
+            $b = body();
+            if (empty($_SESSION['reset_email'])) throw new ApiError('Your session expired. Start again.', 440);
+            $code = preg_replace('/\D/', '', (string)($b['code'] ?? ''));
+            $pass = (string)($b['password'] ?? '');
+            if (strlen($code) !== 6) throw new ApiError('Enter the 6-digit code', 422);
+            if (strlen($pass) < 8) throw new ApiError('Password must be at least 8 characters', 422);
+            if (strlen($pass) > 72) throw new ApiError('Password is too long', 422);
+            $u = reset_user() ?? throw new ApiError("That code isn't right.", 422);
+            if ($u['disabled_at']) throw new ApiError("That code isn't right.", 422);
+            check_code($u, 'reset', $code);
+            db()->prepare('UPDATE users SET password_hash=?, reset_code_hash=NULL, reset_expires_at=NULL, reset_attempts=0,
+                           email_verified_at=COALESCE(email_verified_at, UTC_TIMESTAMP()) WHERE id=?')
+                ->execute([password_hash($pass, PASSWORD_DEFAULT), $u['id']]);
+            unset($_SESSION['reset_email']);
+            login_user((int)$u['id']);
+            respond(['user' => current_user()]);
+
+        case 'delete_account':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Login required', 401);
+            throttle_login();
+            $st = db()->prepare('SELECT password_hash FROM users WHERE id=?');
+            $st->execute([$me['id']]);
+            if (!password_verify((string)(body()['password'] ?? ''), (string)$st->fetchColumn())) {
+                rate_hit('login:' . client_ip());
+                throw new ApiError('Wrong password', 401);
+            }
+            db()->prepare('DELETE FROM users WHERE id=?')->execute([$me['id']]);
+            unset($_SESSION['user_id'], $_SESSION['pending_user_id'], $_SESSION['reset_email']);
+            session_regenerate_id(true);
+            respond(['ok' => true]);
+
+        case 'user_logout':
+            require_post();
+            unset($_SESSION['user_id'], $_SESSION['pending_user_id']);
+            session_regenerate_id(true);
+            respond(['ok' => true]);
 
         case 'login':
             require_post();
             $b = body();
             if (ADMIN_PASS === '') throw new ApiError('Admin login not configured (create config.php)', 500);
+            rate_check('admin:' . client_ip(), LIMIT_ADMIN_FAILS, 'Too many wrong attempts. Try again in 15 minutes.');
             $okUser = hash_equals(ADMIN_USER, (string)($b['username'] ?? ''));
             $okPass = hash_equals(ADMIN_PASS, (string)($b['password'] ?? ''));
-            if (!$okUser || !$okPass) throw new ApiError('Wrong username or password', 401);
+            if (!$okUser || !$okPass) {
+                rate_hit('admin:' . client_ip());
+                throw new ApiError('Wrong username or password', 401);
+            }
             session_regenerate_id(true);
             $_SESSION['admin'] = true;
             respond(['ok' => true]);
@@ -456,6 +826,69 @@ try {
                 $st->execute(['%' . $icon]);
                 if (!$st->fetchColumn()) @unlink(__DIR__ . '/' . $icon);
             }
+            respond(['ok' => true]);
+
+        /* ---------- Admin: store users ---------- */
+        case 'admin_users':
+            require_admin();
+            $rows = db()->query('SELECT id, username, email, created_at, last_login_at, email_verified_at, disabled_at
+                                 FROM users ORDER BY created_at DESC, id DESC')->fetchAll();
+            respond(['users' => array_map(fn($u) => [
+                'id' => (int)$u['id'],
+                'username' => $u['username'],
+                'email' => $u['email'],
+                'avatar' => gravatar_url($u['email']),
+                'created_at' => iso_date($u['created_at']),
+                'last_login_at' => iso_date($u['last_login_at']),
+                'verified_at' => iso_date($u['email_verified_at']),
+                'disabled_at' => iso_date($u['disabled_at']),
+            ], $rows)]);
+
+        // Edit one user. Only the fields sent are changed: username, email, verified (bool), disabled (bool).
+        case 'admin_user_update':
+            require_post();
+            require_admin();
+            $b = body();
+            $id = (int)($b['id'] ?? 0);
+            $st = db()->prepare('SELECT * FROM users WHERE id=?');
+            $st->execute([$id]);
+            $u = $st->fetch() ?: throw new ApiError('User not found', 404);
+            $set = [];
+            if (array_key_exists('username', $b)) {
+                $username = trim((string)$b['username']);
+                if (!preg_match('/^[A-Za-z0-9_]{3,30}$/', $username)) throw new ApiError('Username: 3–30 letters, numbers or _', 422);
+                $set['username'] = $username;
+            }
+            if (array_key_exists('email', $b)) {
+                $email = mb_strtolower(trim((string)$b['email']));
+                if (strlen($email) > 190 || !filter_var($email, FILTER_VALIDATE_EMAIL)) throw new ApiError('Enter a valid email', 422);
+                $set['email'] = $email;
+            }
+            foreach (['username', 'email'] as $col) {
+                if (!isset($set[$col])) continue;
+                $dup = db()->prepare("SELECT 1 FROM users WHERE $col=? AND id<>?");
+                $dup->execute([$set[$col], $id]);
+                if ($dup->fetchColumn()) throw new ApiError($col === 'email' ? 'That email is already registered' : 'That username is taken', 409);
+            }
+            if (array_key_exists('verified', $b)) {
+                $set['email_verified_at'] = $b['verified'] ? ($u['email_verified_at'] ?: gmdate('Y-m-d H:i:s')) : null;
+                if ($b['verified']) $set += ['verify_code_hash' => null, 'verify_expires_at' => null, 'verify_attempts' => 0];
+            }
+            if (array_key_exists('disabled', $b)) {
+                $set['disabled_at'] = $b['disabled'] ? ($u['disabled_at'] ?: gmdate('Y-m-d H:i:s')) : null;
+            }
+            if ($set) {
+                db()->prepare('UPDATE users SET ' . implode(',', array_map(fn($c) => "$c=?", array_keys($set))) . ' WHERE id=?')
+                    ->execute([...array_values($set), $id]);
+            }
+            respond(['ok' => true]);
+
+        case 'admin_user_delete':
+            require_post();
+            require_admin();
+            $st = db()->prepare('DELETE FROM users WHERE id=?');
+            $st->execute([(int)(body()['id'] ?? 0)]);
+            if (!$st->rowCount()) throw new ApiError('User not found', 404);
             respond(['ok' => true]);
 
         case 'upload_icon':

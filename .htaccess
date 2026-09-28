@@ -1,6 +1,24 @@
-# Pages must be rechecked on every visit so phones pick up new ?v= asset links right away;
-# the versioned CSS/JS they point at can stay cached.
+# Passwords and session cookies travel through this site, so plain HTTP is sent to HTTPS
+# (local dev hosts excluded).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$ [NC]
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+</IfModule>
+
 <IfModule mod_headers.c>
+  # No other site may frame these pages (stops clickjacking on the admin panel and sign-in).
+  Header always set X-Frame-Options "DENY"
+  Header always set Content-Security-Policy "frame-ancestors 'none'"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  # Browsers remember to use HTTPS only; sent on HTTPS responses only.
+  Header always set Strict-Transport-Security "max-age=31536000" "expr=%{HTTPS} == 'on'"
+
+  # Pages must be rechecked on every visit so phones pick up new ?v= asset links right away;
+  # the versioned CSS/JS they point at can stay cached.
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"
   </FilesMatch>

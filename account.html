@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05050b">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex">
+  <title>Account · Game Store</title>
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
+  <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css?v=20260928a">
+</head>
+<body class="auth-page">
+  <div class="arcade-wall" aria-hidden="true"><div class="wall-rows" id="wall"></div></div>
+
+  <main class="auth-main">
+    <div class="auth-sheet">
+      <div class="auth-loading" id="loading" role="status" aria-label="Loading"></div>
+
+      <!-- Sign in -->
+      <section class="auth-view" id="loginView" hidden>
+        <header class="auth-head">
+          <div class="auth-logo"><img src="assets/icons/logo-mark.png" alt=""></div>
+          <h1>Sign In</h1>
+          <p>Sign in with your Game Store account to browse and download games and apps.</p>
+        </header>
+        <form id="loginForm" novalidate>
+          <div class="ios-group">
+            <div class="ios-field">
+              <input id="loginId" placeholder=" " autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+              <label for="loginId">Username or Email</label>
+            </div>
+            <div class="ios-field">
+              <input id="loginPass" type="password" placeholder=" " autocomplete="current-password" required>
+              <label for="loginPass">Password</label>
+              <button type="button" class="eye" data-for="loginPass" aria-label="Show password" aria-pressed="false">%EYE%</button>
+            </div>
+          </div>
+          <p class="auth-error" id="loginError" role="alert"></p>
+          <button class="btn-play" type="submit"><span>Sign In</span></button>
+        </form>
+        <p class="auth-forgot"><button type="button" class="link-btn" data-mode="forgot">Forgot password?</button></p>
+        <p class="auth-switch">New to Game Store? <button type="button" class="link-btn" data-mode="register">Create Account</button></p>
+      </section>
+
+      <!-- Create account -->
+      <section class="auth-view" id="registerView" hidden>
+        <header class="auth-head">
+          <div class="auth-logo"><img src="assets/icons/logo-mark.png" alt=""></div>
+          <h1>Create Account</h1>
+          <p>Pick a player name and you're in. It takes less than a minute.</p>
+        </header>
+        <form id="registerForm" novalidate>
+          <div class="ios-group">
+            <div class="ios-field">
+              <input id="regUser" placeholder=" " autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="30" required>
+              <label for="regUser">Username</label>
+            </div>
+            <div class="ios-field">
+              <input id="regEmail" type="email" placeholder=" " autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="190" required>
+              <label for="regEmail">Email</label>
+            </div>
+          </div>
+          <p class="auth-note">Username: 3–30 letters, numbers or _</p>
+
+          <div class="ios-group" style="margin-top:14px">
+            <div class="ios-field">
+              <input id="regPass" type="password" placeholder=" " autocomplete="new-password" maxlength="72" required>
+              <label for="regPass">Password</label>
+              <button type="button" class="eye" data-for="regPass" aria-label="Show password" aria-pressed="false">%EYE%</button>
+            </div>
+            <div class="ios-field">
+              <input id="regPass2" type="password" placeholder=" " autocomplete="new-password" maxlength="72" required>
+              <label for="regPass2">Confirm Password</label>
+              <button type="button" class="eye" data-for="regPass2" aria-label="Show password" aria-pressed="false">%EYE%</button>
+            </div>
+          </div>
+          <div class="power" id="power" data-level="0">
+            <div class="power-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <span class="power-label" id="powerLabel" aria-live="polite">8+ chars</span>
+          </div>
+          <p class="auth-error" id="registerError" role="alert"></p>
+          <button class="btn-play" type="submit"><span>Create Account</span></button>
+        </form>
+        <p class="auth-switch">Already have an account? <button type="button" class="link-btn" data-mode="login">Sign In</button></p>
+      </section>
+
+      <!-- Email code (after register, or signing in before verifying) -->
+      <section class="auth-view" id="verifyView" hidden>
+        <header class="auth-head">
+          <div class="auth-logo mail-badge" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>
+          </div>
+          <h1>Verify Your Email</h1>
+          <p>Enter the 6-digit code we sent to <strong class="v-email" id="vEmail"></strong></p>
+        </header>
+        <form id="verifyForm" novalidate>
+          <div class="code-boxes" id="codeBoxes">
+            <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="6-digit verification code" spellcheck="false">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <p class="auth-error" id="verifyError" role="alert"></p>
+          <button class="btn-play" type="submit"><span>Verify</span></button>
+        </form>
+        <p class="auth-switch">Didn't get it? <button type="button" class="link-btn" id="resendBtn">Resend code</button></p>
+        <p class="auth-note" style="text-align:center">It can take a minute to arrive.
+          <button type="button" class="link-btn" id="switchAccount">Use a different account</button></p>
+      </section>
+
+      <!-- Forgot password, step 1: which email -->
+      <section class="auth-view" id="forgotView" hidden>
+        <header class="auth-head">
+          <div class="auth-logo mail-badge" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 7.6-1.7"/><circle cx="12" cy="15.7" r="1.4" fill="currentColor"/></svg>
+          </div>
+          <h1>Forgot Password?</h1>
+          <p>Enter the email you signed up with and we'll send you a code to reset your password.</p>
+        </header>
+        <form id="forgotForm" novalidate>
+          <div class="ios-group">
+            <div class="ios-field">
+              <input id="fEmail" type="email" placeholder=" " autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="190" required>
+              <label for="fEmail">Email</label>
+            </div>
+          </div>
+          <p class="auth-error" id="forgotError" role="alert"></p>
+          <button class="btn-play" type="submit"><span>Send Code</span></button>
+        </form>
+        <p class="auth-switch">Remembered it? <button type="button" class="link-btn" data-mode="login">Sign In</button></p>
+      </section>
+
+      <!-- Forgot password, step 2: code + new password -->
+      <section class="auth-view" id="resetView" hidden>
+        <header class="auth-head">
+          <div class="auth-logo mail-badge" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16.5 6.5l2.5 2.5M14 9l2 2"/></svg>
+          </div>
+          <h1>Reset Password</h1>
+          <p>If there's an account for <strong class="v-email" id="rEmail"></strong>, we've emailed it a 6-digit code.</p>
+        </header>
+        <form id="resetForm" novalidate>
+          <div class="code-boxes" id="rCodeBoxes">
+            <input id="rCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="6-digit reset code" spellcheck="false">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="ios-group" style="margin-top:14px">
+            <div class="ios-field">
+              <input id="rPass" type="password" placeholder=" " autocomplete="new-password" maxlength="72" required>
+              <label for="rPass">New Password</label>
+              <button type="button" class="eye" data-for="rPass" aria-label="Show password" aria-pressed="false">%EYE%</button>
+            </div>
+            <div class="ios-field">
+              <input id="rPass2" type="password" placeholder=" " autocomplete="new-password" maxlength="72" required>
+              <label for="rPass2">Confirm New Password</label>
+              <button type="button" class="eye" data-for="rPass2" aria-label="Show password" aria-pressed="false">%EYE%</button>
+            </div>
+          </div>
+          <div class="power" id="rPower" data-level="0">
+            <div class="power-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <span class="power-label" aria-live="polite">8+ chars</span>
+          </div>
+          <p class="auth-error" id="resetError" role="alert"></p>
+          <button class="btn-play" type="submit"><span>Reset Password</span></button>
+        </form>
+        <p class="auth-switch">Didn't get it? <button type="button" class="link-btn" id="rResendBtn">Resend code</button></p>
+        <p class="auth-note" style="text-align:center">It can take a minute to arrive.
+          <button type="button" class="link-btn" data-mode="forgot">Use a different email</button></p>
+      </section>
+
+      <!-- Signed in -->
+      <section class="auth-view" id="profileView" hidden>
+        <header class="player">
+          <div class="player-avatar"><span id="avatar"></span></div>
+          <h1 id="pName"></h1>
+          <p id="pEmail"></p>
+        </header>
+        <div class="ios-list">
+          <div class="ios-row">
+            <span class="row-ico" style="--c1:#2f7bff;--c2:#8b5cf6"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4.5"/><path d="M3.5 20.5c0-4 3.8-7 8.5-7s8.5 3 8.5 7z"/></svg></span>
+            <span class="k">Username</span><span class="v" id="pUser"></span>
+          </div>
+          <div class="ios-row">
+            <span class="row-ico" style="--c1:#ec4899;--c2:#f97316"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></span>
+            <span class="k">Member Since</span><span class="v" id="pSince"></span>
+          </div>
+        </div>
+        <div class="ios-list">
+          <a class="ios-row" href="./?type=game">
+            <span class="row-ico" style="--c1:#8b5cf6;--c2:#db2777"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.8 4a2.8 2.8 0 0 1-4.8 1.4L14.6 16H9.4l-1.7 2.4a2.8 2.8 0 0 1-4.8-1.4l-.8-4A5 5 0 0 1 7 7zm1 3v1.5H6.5v1.5H8v1.5h1.5V13H11v-1.5H9.5V10zm8 .5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg></span>
+            <span class="k">Browse Games</span>%CHEV%
+          </a>
+          <a class="ios-row" href="./?type=app">
+            <span class="row-ico" style="--c1:#0891b2;--c2:#2f7bff"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.2"/><rect x="13" y="3" width="8" height="8" rx="2.2"/><rect x="3" y="13" width="8" height="8" rx="2.2"/><rect x="13" y="13" width="8" height="8" rx="2.2"/></svg></span>
+            <span class="k">Browse Apps</span>%CHEV%
+          </a>
+        </div>
+        <div class="ios-list">
+          <button class="ios-row danger" type="button" id="logoutBtn">Sign Out</button>
+        </div>
+        <p class="auth-forgot"><button type="button" class="link-btn danger-link" data-mode="delete">Delete Account</button></p>
+      </section>
+
+      <!-- Delete own account (asks for the password) -->
+      <section class="auth-view" id="deleteView" hidden>
+        <header class="auth-head">
+          <div class="auth-logo mail-badge danger-badge" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
+          </div>
+          <h1>Delete Account?</h1>
+          <p>Your account <strong class="v-email" id="dName"></strong> will be removed for good. This can't be undone.</p>
+        </header>
+        <form id="deleteForm" novalidate>
+          <div class="ios-group">
+            <div class="ios-field">
+              <input id="dPass" type="password" placeholder=" " autocomplete="current-password" required>
+              <label for="dPass">Password</label>
+              <button type="button" class="eye" data-for="dPass" aria-label="Show password" aria-pressed="false">%EYE%</button>
+            </div>
+          </div>
+          <p class="auth-error" id="deleteError" role="alert"></p>
+          <button class="btn-play danger" type="submit"><span>Delete My Account</span></button>
+        </form>
+        <p class="auth-switch"><button type="button" class="link-btn" data-mode="profile">Cancel</button></p>
+      </section>
+    </div>
+  </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Main" hidden></nav>
+
+  <script src="assets/common.js?v=20260928a"></script>
+  <script>
+    const $ = s => document.querySelector(s);
+    $('#tabbar').innerHTML = tabBarHTML();
+
+    // Shared inline icons (kept out of the markup above to avoid repeating them).
+    const EYE = `<svg class="eye-on" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+      <svg class="eye-off" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.2 3.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M3 3l18 18M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>`;
+    const CHEV_SVG = '<svg class="chev" width="8" height="14" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 6 6-6 6"/></svg>';
+    document.querySelectorAll('.eye').forEach(b => b.innerHTML = EYE);
+    document.querySelectorAll('.ios-row').forEach(r => r.innerHTML = r.innerHTML.replace('%CHEV%', CHEV_SVG));
+
+    // Background: rows of category tiles drifting across a tilted wall.
+    (function buildWall() {
+      const cats = Object.keys(CAT_ICONS);
+      const rows = [];
+      for (let r = 0; r < 9; r++) {
+        const tiles = Array.from({ length: 14 }, (_, i) => {
+          const c = cats[(i * 5 + r * 3) % cats.length];
+          const [c1, c2] = catColors(c);
+          return `<span class="wall-tile" style="--c1:${c1};--c2:${c2}">${catIcon(c)}</span>`;
+        }).join('');
+        rows.push(`<div class="wall-row" style="--dur:${70 + (r % 3) * 18}s">${tiles}${tiles}</div>`);
+      }
+      $('#wall').innerHTML = rows.join('');
+    })();
+
+    // After signing in, return to the page that sent us here (same-site paths only).
+    const next = new URLSearchParams(location.search).get('next');
+    let leaving = false;
+    const goBack = () => {
+      leaving = true;
+      location.replace(next && /^\/(?![\/\\])/.test(next) ? next : './');
+    };
+
+    const VIEWS = { login: 'Sign In', register: 'Create Account', verify: 'Verify Email', forgot: 'Forgot Password', reset: 'Reset Password', profile: 'Account', delete: 'Delete Account' };
+    const FIRST_FIELD = { login: '#loginId', register: '#regUser', forgot: '#fEmail', delete: '#dPass' };
+
+    function setView(v) {
+      $('#loading').hidden = true;
+      for (const id in VIEWS) $('#' + id + 'View').hidden = id !== v;
+      $('#tabbar').hidden = v !== 'profile' && v !== 'delete';   // the store is members-only
+      document.querySelectorAll('.auth-error').forEach(el => el.textContent = '');
+      document.title = VIEWS[v] + ' · Game Store';
+      if (v === 'profile' || v === 'delete') return;
+      const p = new URLSearchParams(location.search);
+      if (v === 'register') p.set('register', ''); else p.delete('register');
+      const q = p.toString().replace(/=(&|$)/g, '$1');
+      history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+    }
+
+    function showProfile(user) {
+      if (location.search) history.replaceState(null, '', location.pathname);
+      $('#avatar').innerHTML = avatarHTML(user);
+      $('#pName').textContent = user.username;
+      $('#pUser').textContent = user.username;
+      $('#pEmail').textContent = user.email;
+      $('#pSince').textContent = fmtDate(user.created_at.slice(0, 10));
+      $('#dName').textContent = user.username;
+      setView('profile');
+    }
+
+    document.addEventListener('click', e => {
+      const m = e.target.closest('[data-mode]');
+      if (m) {
+        const mode = m.dataset.mode;
+        // Carry an email typed on the sign-in page over to "Forgot password".
+        if (mode === 'forgot' && !$('#fEmail').value && $('#loginId').value.includes('@')) $('#fEmail').value = $('#loginId').value.trim();
+        setView(mode);
+        if (FIRST_FIELD[mode]) $(FIRST_FIELD[mode]).focus();
+      }
+      const eye = e.target.closest('.eye');
+      if (eye) {
+        const input = document.getElementById(eye.dataset.for);
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        eye.setAttribute('aria-pressed', show);
+        eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        input.focus();
+      }
+    });
+
+    // Password strength meter (length, mixed case, digits, symbols).
+    function strengthMeter(input, power) {
+      const update = () => {
+        const p = input.value;
+        let level = 0;
+        if (p.length >= 8) {
+          level = Math.min(4, 1 + [/[a-z]/.test(p) && /[A-Z]/.test(p), /\d/.test(p), /[^A-Za-z0-9]/.test(p), p.length >= 12]
+            .filter(Boolean).length);
+        }
+        power.dataset.level = level;
+        power.querySelector('.power-label').textContent = p ? ['Too short', 'Weak', 'Okay', 'Strong', 'Legendary'][level] : '8+ chars';
+      };
+      input.addEventListener('input', update);
+      return update;                                      // call after clearing the field
+    }
+    const regPower = strengthMeter($('#regPass'), $('#power'));
+    const resetPower = strengthMeter($('#rPass'), $('#rPower'));
+
+    // Runs a form submit: spinner on the button, API error (with a shake) under the form.
+    async function submit(e, errEl, fn) {
+      e.preventDefault();
+      const btn = e.target.querySelector('.btn-play');
+      if (btn.disabled) return;                           // already sending (e.g. code auto-submit + Enter)
+      btn.disabled = true;
+      btn.classList.add('busy');
+      errEl.textContent = '';
+      try {
+        await fn();
+      } catch (err) {
+        errEl.textContent = err.message;
+        const group = e.target.querySelector('.ios-group, .code-boxes');
+        group.classList.remove('shake');
+        void group.offsetWidth;                           // restart the animation
+        group.classList.add('shake');
+      } finally {
+        if (!leaving) {                                   // keep the spinner while the next page loads
+          btn.disabled = false;
+          btn.classList.remove('busy');
+        }
+      }
+    }
+
+    // A 440 means the server forgot which account this step was for: start over.
+    function restartOn440(err, view) {
+      if (err.status !== 440) return false;
+      setView(view);
+      $('#' + view + 'Error').textContent = err.message;
+      return true;
+    }
+
+    $('#loginForm').addEventListener('submit', e => submit(e, $('#loginError'), async () => {
+      const login = $('#loginId').value.trim(), password = $('#loginPass').value;
+      if (!login || !password) throw new Error('Enter your username and password.');
+      const r = await api('user_login', { body: { login, password } });
+      if (r.verify) return showVerify(r);
+      goBack();
+    }));
+
+    $('#registerForm').addEventListener('submit', e => submit(e, $('#registerError'), async () => {
+      const username = $('#regUser').value.trim(), email = $('#regEmail').value.trim();
+      const password = $('#regPass').value;
+      if (!/^[A-Za-z0-9_]{3,30}$/.test(username)) throw new Error('Username: 3–30 letters, numbers or _');
+      if (!email || !$('#regEmail').checkValidity()) throw new Error('Enter a valid email.');
+      if (password.length < 8) throw new Error('Password must be at least 8 characters.');
+      if (password !== $('#regPass2').value) throw new Error('Passwords do not match.');
+      const r = await api('register', { body: { username, email, password } });
+      e.target.reset();
+      regPower();
+      showVerify(r);
+    }));
+
+    // ---- Six-box code inputs: one real input sits invisibly over the boxes, so typing,
+    // paste and email/SMS autofill all just work. ----
+    function codeBoxes(input, onFull) {
+      const render = () => {
+        const v = input.value, focused = document.activeElement === input;
+        input.parentNode.querySelectorAll('span').forEach((b, i) => {
+          b.textContent = v[i] || '';
+          b.classList.toggle('filled', i < v.length);
+          b.classList.toggle('active', focused && i === Math.min(v.length, 5));
+        });
+      };
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/\D/g, '').slice(0, 6);
+        input.closest('form').querySelector('.auth-error').textContent = '';
+        render();
+        if (input.value.length === 6) onFull();
+      });
+      ['focus', 'blur'].forEach(t => input.addEventListener(t, render));
+      return () => { input.value = ''; render(); };       // clear
+    }
+
+    // "Resend code" link with a countdown.
+    function resendTimer(btn) {
+      let timer;
+      return secs => {
+        clearInterval(timer);
+        const tick = () => {
+          btn.disabled = secs > 0;
+          btn.textContent = secs > 0 ? `Resend code in ${secs}s` : 'Resend code';
+          if (secs-- <= 0) clearInterval(timer);
+        };
+        tick();
+        timer = setInterval(tick, 1000);
+      };
+    }
+
+    // ---- Email verification (after sign-up) ----
+    const clearCode = codeBoxes($('#code'), () => $('#verifyForm').requestSubmit());
+    const verifyResend = resendTimer($('#resendBtn'));
+
+    function showVerify(r) {
+      $('#vEmail').textContent = r.email;
+      clearCode();
+      setView('verify');
+      if (r.sent === false) $('#verifyError').textContent = r.error || "We couldn't send the email. Tap Resend code to try again.";
+      verifyResend(r.resend_in || 0);
+      $('#code').focus();
+    }
+
+    $('#verifyForm').addEventListener('submit', e => submit(e, $('#verifyError'), async () => {
+      const code = $('#code').value;
+      if (code.length !== 6) throw new Error('Enter the 6-digit code.');
+      try {
+        await api('verify_email', { body: { code } });
+      } catch (err) {
+        if (restartOn440(err, 'login')) return;
+        clearCode();
+        $('#code').focus();
+        throw err;
+      }
+      goBack();
+    }));
+
+    $('#resendBtn').addEventListener('click', async () => {
+      $('#resendBtn').disabled = true;
+      $('#verifyError').textContent = '';
+      try {
+        const r = await api('resend_code', { body: {} });
+        toast('New code sent');
+        verifyResend(r.resend_in);
+      } catch (err) {
+        if (restartOn440(err, 'login')) return;
+        $('#verifyError').textContent = err.message;
+        $('#resendBtn').disabled = false;
+      }
+    });
+
+    $('#switchAccount').addEventListener('click', async () => {
+      try { await api('user_logout', { body: {} }); } catch {}
+      setView('login');
+      $('#loginId').focus();
+    });
+
+    // ---- Forgot password ----
+    const clearResetCode = codeBoxes($('#rCode'), () => $('#rPass').focus());
+    const resetResend = resendTimer($('#rResendBtn'));
+
+    async function requestResetCode(email) {
+      const r = await api('forgot_password', { body: { email } });
+      $('#rEmail').textContent = r.email;
+      resetResend(r.resend_in);
+    }
+
+    $('#forgotForm').addEventListener('submit', e => submit(e, $('#forgotError'), async () => {
+      const email = $('#fEmail').value.trim();
+      if (!email || !$('#fEmail').checkValidity()) throw new Error('Enter a valid email.');
+      await requestResetCode(email);
+      $('#resetForm').reset();
+      resetPower();
+      clearResetCode();
+      setView('reset');
+      $('#rCode').focus();
+    }));
+
+    $('#resetForm').addEventListener('submit', e => submit(e, $('#resetError'), async () => {
+      const code = $('#rCode').value, password = $('#rPass').value;
+      if (code.length !== 6) throw new Error('Enter the 6-digit code from the email.');
+      if (password.length < 8) throw new Error('Password must be at least 8 characters.');
+      if (password !== $('#rPass2').value) throw new Error('Passwords do not match.');
+      try {
+        await api('reset_password', { body: { code, password } });
+      } catch (err) {
+        if (restartOn440(err, 'forgot')) return;
+        if (err.status !== 422 || /code/i.test(err.message)) { clearResetCode(); $('#rCode').focus(); }
+        throw err;
+      }
+      toast('Password changed');
+      goBack();
+    }));
+
+    $('#rResendBtn').addEventListener('click', async () => {
+      $('#rResendBtn').disabled = true;
+      $('#resetError').textContent = '';
+      try {
+        await requestResetCode($('#rEmail').textContent);
+        toast('New code sent');
+      } catch (err) {
+        $('#resetError').textContent = err.message;
+        $('#rResendBtn').disabled = false;
+      }
+    });
+
+    // Forget the avatar the store pages remember for this tab.
+    const forgetMe = () => { try { sessionStorage.removeItem('me'); } catch {} };
+
+    $('#deleteForm').addEventListener('submit', e => submit(e, $('#deleteError'), async () => {
+      const password = $('#dPass').value;
+      if (!password) throw new Error('Enter your password to confirm.');
+      try {
+        await api('delete_account', { body: { password } });
+      } catch (err) {
+        if (err.status === 401 && err.message !== 'Wrong password') { setView('login'); return; }
+        throw err;
+      }
+      forgetMe();
+      e.target.reset();
+      $('#loginForm').reset();
+      setView('login');
+      toast('Your account was deleted');
+    }));
+
+    $('#logoutBtn').addEventListener('click', async e => {
+      e.target.disabled = true;
+      try {
+        await api('user_logout', { body: {} });
+        forgetMe();
+        $('#loginForm').reset();
+        setView('login');
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        e.target.disabled = false;
+      }
+    });
+
+    api('me')
+      .then(r => {
+        if (r.user && next) goBack();
+        else if (r.user) showProfile(r.user);
+        else if (r.pending) showVerify(r.pending);
+        else setView(new URLSearchParams(location.search).has('register') ? 'register' : 'login');
+      })
+      .catch(() => setView('login'));
+  </script>
+</body>
+</html>

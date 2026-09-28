@@ -22,9 +22,11 @@ async function api(action, opts = {}) {
   try {
     data = await res.json();
   } catch {
-    // No PHP (e.g. GitHub Pages): serve read-only actions straight from the JSON file.
-    if (init.method === 'GET' && action in staticApi) return staticApi[action](opts.params || {});
     throw new Error(`Server error (${res.status})`);
+  }
+  if (res.status === 401 && document.body.dataset.auth === 'required') {
+    location.replace(loginUrl());
+    return new Promise(() => {});              // page is leaving; keep skeletons instead of an error
   }
   if (!res.ok || data.error) {
     const err = new Error(data.error || 'Request failed');
@@ -34,76 +36,10 @@ async function api(action, opts = {}) {
   return data;
 }
 
-// Static-hosting fallback mirroring api.php's public 'list' and 'get' actions.
-let staticData;
-async function loadStaticData() {
-  if (!staticData) {
-    const res = await fetch(new URL(BASE + 'data/apps.json', location.href));
-    if (!res.ok) throw new Error(`Could not load data (${res.status})`);
-    staticData = await res.json();
-  }
-  return staticData;
+// Account page, remembering where to come back to after logging in.
+function loginUrl() {
+  return new URL(BASE + 'account.html?next=' + encodeURIComponent(location.pathname + location.search), location.href).href;
 }
-
-const isPublished = i => (i.status || 'published') === 'published';
-
-const LIST_FIELDS = ['id', 'slug', 'type', 'name', 'developer', 'category', 'icon', 'short_description', 'latest_version', 'featured'];
-const listRow = i => Object.fromEntries(LIST_FIELDS.filter(k => k in i).map(k => [k, i[k]]));
-
-function matchesFilters(i, type, cat, q) {
-  if (type && i.type !== type) return false;
-  if (cat && i.category !== cat) return false;
-  if (!q) return true;
-  return [i.name, i.developer, i.category, i.short_description, ...(i.tags || [])].join(' ').toLowerCase().includes(q);
-}
-
-const staticApi = {
-  async list(params) {
-    const d = await loadStaticData();
-    const items = (d.items || []).filter(isPublished)
-      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-    if (params.page == null) return { items, categories: d.categories || {} };
-
-    const q = String(params.q || '').trim().toLowerCase();
-    const filtered = items.filter(i => matchesFilters(i, params.type || '', params.category || '', q));
-    const counts = {};
-    items.forEach(i => {
-      if (i.category && (!params.type || (i.type || 'game') === params.type)) counts[i.category] = (counts[i.category] || 0) + 1;
-    });
-    const shelves = {};
-    if (params.shelves != null) {
-      const n = Math.max(1, Math.min(30, parseInt(params.shelves, 10) || 1));
-      filtered.forEach(i => {
-        if (!i.category) return;
-        const s = shelves[i.category] ||= { category: i.category, count: 0, items: [] };
-        if (s.count++ < n) s.items.push(listRow(i));
-      });
-    }
-    const per = Math.max(1, Math.min(100, parseInt(params.per_page, 10) || 24));
-    const pages = Math.max(1, Math.ceil(filtered.length / per));
-    const page = Math.max(1, Math.min(pages, parseInt(params.page, 10) || 1));
-    return {
-      items: filtered.slice((page - 1) * per, page * per).map(listRow),
-      total: filtered.length, page, pages, per_page: per,
-      facets: {
-        types: [...new Set(items.map(i => i.type || 'game'))],
-        categories: [...new Set(items.map(i => i.category).filter(Boolean))].sort(),
-        category_counts: Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1])),
-      },
-      featured: items.filter(i => i.featured?.popular || i.featured?.editors_choice).map(listRow),
-      shelves: Object.values(shelves).sort((a, b) => b.count - a.count),
-    };
-  },
-  async get(params) {
-    const d = await loadStaticData();
-    const item = (d.items || []).find(i =>
-      (params.id != null && String(i.id) === String(params.id)) ||
-      (params.slug != null && i.slug === params.slug));
-    if (!item || !isPublished(item)) { const e = new Error('Not found'); e.status = 404; throw e; }
-    return { item };
-  },
-  async me() { return { admin: false }; },
-};
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -177,6 +113,37 @@ function tabBarHTML(active = '') {
       <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>
       <span>${label}</span>
     </a>`).join('');
+}
+
+// Profile picture: the Gravatar of the account's email, or the username's initial when there is none.
+function avatarHTML(user) {
+  const initial = esc((user.username || '?').charAt(0).toUpperCase());
+  if (!user.avatar) return `<span class="avatar-initial">${initial}</span>`;
+  return `<span class="avatar-initial">${initial}</span><img src="${esc(user.avatar)}" alt="" referrerpolicy="no-referrer"
+    onload="this.classList.add('ok')" onerror="this.remove()">`;
+}
+
+// Round profile button in the top-right corner of the store pages (opens the account page).
+function mountAccountButton() {
+  const main = document.querySelector('main.wrap');
+  if (!main) return;
+  const btn = document.createElement('a');
+  btn.className = 'me-btn';
+  btn.href = BASE + 'account.html';
+  btn.setAttribute('aria-label', 'Account');
+  main.append(btn);
+  const fill = u => { btn.innerHTML = avatarHTML(u); btn.title = u.username; };
+  // Last known user from this tab, so the picture shows at once instead of popping in.
+  try { const u = JSON.parse(sessionStorage.getItem('me') || 'null'); if (u) fill(u); } catch {}
+  api('me').then(r => {
+    if (!r.user) {                                // signed out elsewhere: drop the remembered picture
+      btn.innerHTML = '';
+      try { sessionStorage.removeItem('me'); } catch {}
+      return;
+    }
+    fill(r.user);
+    try { sessionStorage.setItem('me', JSON.stringify({ username: r.user.username, avatar: r.user.avatar })); } catch {}
+  }).catch(() => {});
 }
 
 function fmtSize(mb) {
