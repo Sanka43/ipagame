@@ -12,15 +12,17 @@ return [
         'user' => 'CPANELUSER_ipauser',
         'pass' => '',
     ],
-    // Mailbox that sends the sign-up verification codes. Create info@ipagame.store in cPanel → Email Accounts,
-    // then copy the SMTP settings from its "Connect Devices" page. Left out = emails are saved to data/mail/ (dev).
+    // SMTP that sends the sign-up / password reset codes. Left out = emails are saved to data/mail/ (dev).
+    // Brevo (inbox delivery): Brevo → SMTP & API → SMTP tab. 'user' is the "Login" shown there
+    // (xxxx@smtp-brevo.com), 'pass' is an SMTP key generated on that page. 'from' must be a verified Brevo
+    // sender on the authenticated ipagame.store domain.
+    // (Old cPanel mailbox instead: host premium362-1.web-hosting.com, port 465, secure ssl,
+    //  user/from info@ipagame.store and the mailbox password.)
     'mail' => [
-        // The server's own name: its SSL certificate is *.web-hosting.com, so 'mail.ipagame.store'
-        // fails the certificate check.
-        'host' => 'premium362-1.web-hosting.com',
-        'port' => 465,
-        'secure' => 'ssl',            // 'ssl' for 465, 'tls' for 587
-        'user' => 'info@ipagame.store',
+        'host' => 'smtp-relay.brevo.com',
+        'port' => 587,                // 2525 also works if the host blocks 587
+        'secure' => 'tls',            // 'ssl' for 465, 'tls' for 587/2525
+        'user' => 'xxxxxxxxx@smtp-brevo.com',
         'pass' => '',
         'from' => 'info@ipagame.store',
         'from_name' => 'IPA Game Store',
