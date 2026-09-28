@@ -740,7 +740,9 @@ main.wrap { position: relative; display: flow-root; }   /* flow-root: title marg
 .google-wrap { margin-top: 18px; }
 .or-line { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: rgba(255, 255, 255, .1); }
-.gbtn { display: flex; justify-content: center; min-height: 44px; color-scheme: normal; }
+/* The Google iframe is a light document: a dark parent scheme would paint it an opaque white box. */
+.gbtn { display: flex; justify-content: center; min-height: 44px; color-scheme: light; }
+.gbtn iframe { color-scheme: light; }
 
 /* Profile photo editing */
 .player-avatar { position: relative; }
