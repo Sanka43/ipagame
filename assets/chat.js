@@ -1,7 +1,6 @@
-// Live support chat. Store pages call mountChat() for the floating chat button; the admin panel
+// Live support chat. The account page calls mountChat() for its "Chat with Support" row; the admin panel
 // reuses chatLogHTML / chatComposer for its Support tab. Needs common.js.
 
-const CHAT_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3c5 0 9 3.4 9 7.7s-4 7.7-9 7.7c-.9 0-1.8-.1-2.6-.3L5 20.5c-.5.2-1-.2-.9-.7l.6-3.3C3.6 15.1 3 13 3 10.7 3 6.4 7 3 12 3z"/></svg>';
 const SEND_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.4 21 12.8a.9.9 0 0 0 0-1.6L3.4 3.6a.7.7 0 0 0-1 .8L4.6 11 14 12l-9.4 1-2.2 6.6a.7.7 0 0 0 1 .8z"/></svg>';
 const CLOSE_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 
@@ -91,16 +90,11 @@ function composerHTML(placeholder) {
     <button type="submit" class="chat-send" aria-label="Send">${SEND_SVG}</button>`;
 }
 
-// Floating "Support" button + chat panel for signed-in members. Returns a function that removes it again.
-function mountChat() {
+// Support chat panel for signed-in members, opened by `trigger` (an element holding a .chat-badge
+// for the unread count). Returns a function that removes it again.
+function mountChat(trigger) {
   const POLL_OPEN = 4000, POLL_CLOSED = 30000;
   let messages = [], seen = 0, open = false, loaded = false, timer = 0, busy = false, gone = false;
-
-  const fab = document.createElement('button');
-  fab.type = 'button';
-  fab.className = 'chat-fab';
-  fab.setAttribute('aria-label', 'Chat with support');
-  fab.innerHTML = CHAT_SVG + '<span class="chat-badge" hidden></span>';
 
   const panel = document.createElement('section');
   panel.className = 'chat-panel';
@@ -115,10 +109,10 @@ function mountChat() {
     </header>
     <div class="chat-log" aria-live="polite"></div>
     <form class="chat-form">${composerHTML('Message')}</form>`;
-  document.body.append(fab, panel);
+  document.body.append(panel);
 
   const log = panel.querySelector('.chat-log');
-  const badge = fab.querySelector('.chat-badge');
+  const badge = trigger.querySelector('.chat-badge');
   const composer = chatComposer(panel.querySelector('.chat-form'), async text => {
     const r = await api('chat_send', { body: { body: text } });
     add([r.message]);
@@ -137,9 +131,9 @@ function mountChat() {
           <p>Ask about a game, a download that won't install or your account. We'll answer right here.</p></div>`, forceBottom);
   }
   function setBadge(n) {
+    if (!badge) return;
     badge.hidden = !n;
     badge.textContent = n > 9 ? '9+' : n;
-    fab.setAttribute('aria-label', n ? `Chat with support (${n} unread)` : 'Chat with support');
   }
 
   async function poll() {
@@ -168,33 +162,31 @@ function mountChat() {
     timer = setTimeout(poll, open ? POLL_OPEN : POLL_CLOSED);
   }
 
-  function setOpen(v, focus = true) {
+  function setOpen(v) {
     open = v;
     panel.hidden = !v;
-    fab.classList.toggle('is-open', v);
     document.documentElement.classList.toggle('chat-open', v);
-    try { v ? sessionStorage.setItem('chatOpen', '1') : sessionStorage.removeItem('chatOpen'); } catch {}
     if (v) {
       if (!loaded) log.innerHTML = '<div class="chat-loading" role="status" aria-label="Loading"></div>';
-      if (focus) composer.focus();
+      composer.focus();
     }
     poll();
   }
 
-  fab.addEventListener('click', () => setOpen(!open));
-  panel.querySelector('[data-close]').addEventListener('click', () => { setOpen(false); fab.focus(); });
-  panel.addEventListener('keydown', e => { if (e.key === 'Escape') { setOpen(false); fab.focus(); } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
-
-  // Stay open across page loads on wide screens (on phones the panel covers the page, so start closed).
-  let reopen = false;
-  try { reopen = sessionStorage.getItem('chatOpen') === '1' && matchMedia('(min-width: 600px)').matches; } catch {}
-  setOpen(reopen, false);
+  const onTrigger = () => setOpen(!open);
+  const onVisible = () => { if (!document.hidden) poll(); };
+  trigger.addEventListener('click', onTrigger);
+  panel.querySelector('[data-close]').addEventListener('click', () => { setOpen(false); trigger.focus(); });
+  panel.addEventListener('keydown', e => { if (e.key === 'Escape') { setOpen(false); trigger.focus(); } });
+  document.addEventListener('visibilitychange', onVisible);
+  poll();
 
   function unmount() {
     gone = true;
     clearTimeout(timer);
-    fab.remove();
+    setBadge(0);
+    trigger.removeEventListener('click', onTrigger);
+    document.removeEventListener('visibilitychange', onVisible);
     panel.remove();
     document.documentElement.classList.remove('chat-open');
   }

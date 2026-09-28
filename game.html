@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20260928d">
+  <link rel="stylesheet" href="assets/style.css?v=20260928e">
 </head>
 <body data-auth="required">
   <main class="wrap detail" id="app">
@@ -22,13 +22,11 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20260928d"></script>
-  <script src="assets/chat.js?v=20260928d"></script>
+  <script src="assets/common.js?v=20260928e"></script>
   <script>
     const el = document.getElementById('content');
     document.getElementById('tabbar').innerHTML = tabBarHTML();
     mountAccountButton();
-    mountChat();
     const slug = new URLSearchParams(location.search).get('slug') || '';
 
     const skelStat = `<div class="stat">${skelLine('60%', 10)}${skelLine('45%', 14)}</div>`;
