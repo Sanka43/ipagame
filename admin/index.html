@@ -8,7 +8,7 @@
   <link rel="icon" href="../assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="../assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css?v=20260928e">
+  <link rel="stylesheet" href="../assets/style.css?v=20260928f">
 </head>
 <body>
   <!-- Login -->
@@ -208,6 +208,39 @@
         <div class="checks">
           <label class="check"><input type="checkbox" name="popular"> Popular</label>
           <label class="check"><input type="checkbox" name="editors_choice"> Editors' choice</label>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="f-rating">Rating (0–5)</label>
+            <input class="input" id="f-rating" name="rating_value" type="number" min="0" max="5" step="0.01" placeholder="e.g. 4.5">
+          </div>
+          <div class="field">
+            <label class="label" for="f-rating-count">Number of ratings</label>
+            <input class="input" id="f-rating-count" name="rating_count" type="number" min="0" step="1" placeholder="e.g. 1200">
+          </div>
+        </div>
+
+        <h3>Screenshots</h3>
+        <div class="shots-edit" data-device="screenshots">
+          <div class="shots-head"><span>iPhone</span> <span class="muted shot-count"></span></div>
+          <div class="shot-list"></div>
+          <div class="shot-add">
+            <input class="input" type="url" placeholder="Paste image URL, then Add" aria-label="iPhone screenshot URL">
+            <button type="button" class="btn sm ghost" data-add-url>Add</button>
+            <label class="btn sm ghost" style="cursor:pointer">Upload
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden></label>
+          </div>
+        </div>
+        <div class="shots-edit" data-device="ipad_screenshots">
+          <div class="shots-head"><span>iPad</span> <span class="muted shot-count"></span></div>
+          <div class="shot-list"></div>
+          <div class="shot-add">
+            <input class="input" type="url" placeholder="Paste image URL, then Add" aria-label="iPad screenshot URL">
+            <button type="button" class="btn sm ghost" data-add-url>Add</button>
+            <label class="btn sm ghost" style="cursor:pointer">Upload
+              <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden></label>
+          </div>
         </div>
 
         <h3>Versions <button type="button" class="btn sm ghost" id="addVersionBtn">+ Add version</button></h3>
@@ -410,6 +443,66 @@
       return box;
     }
 
+    // Screenshot URLs being edited, per device, in display order.
+    const shots = { screenshots: [], ipad_screenshots: [] };
+    const MAX_SHOTS = 20;
+
+    function renderShots() {
+      document.querySelectorAll('.shots-edit').forEach(box => {
+        const list = shots[box.dataset.device];
+        box.querySelector('.shot-count').textContent = list.length ? `${list.length} / ${MAX_SHOTS}` : 'none';
+        box.querySelector('.shot-list').innerHTML = list.map((u, i) => `
+          <figure class="shot-item">
+            <a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="" loading="lazy"></a>
+            <figcaption>
+              <button type="button" class="icon-btn sm" data-move="${i}" aria-label="Move left" ${i ? '' : 'disabled'}>‹</button>
+              <button type="button" class="icon-btn sm" data-drop="${i}" aria-label="Remove screenshot">✕</button>
+            </figcaption>
+          </figure>`).join('');
+      });
+    }
+
+    function addShot(device, url) {
+      const list = shots[device];
+      if (list.length >= MAX_SHOTS) { toast(`Up to ${MAX_SHOTS} screenshots`); return false; }
+      if (!list.includes(url)) list.push(url);
+      return true;
+    }
+
+    document.querySelectorAll('.shots-edit').forEach(box => {
+      const device = box.dataset.device;
+      const urlInput = box.querySelector('input[type=url]');
+      const addUrl = () => {
+        const u = urlInput.value.trim();
+        if (!u) return;
+        if (!/^https?:\/\/\S+$/i.test(u)) { toast('Enter an http(s) image URL'); return; }
+        if (addShot(device, u)) { urlInput.value = ''; renderShots(); }
+      };
+      box.querySelector('[data-add-url]').addEventListener('click', addUrl);
+      urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } });
+      box.querySelector('.shot-list').addEventListener('click', e => {
+        const list = shots[device];
+        const mv = e.target.closest('[data-move]'), dr = e.target.closest('[data-drop]');
+        if (mv) { const i = +mv.dataset.move; [list[i - 1], list[i]] = [list[i], list[i - 1]]; }
+        else if (dr) list.splice(+dr.dataset.drop, 1);
+        else return;
+        renderShots();
+      });
+      box.querySelector('input[type=file]').addEventListener('change', async e => {
+        const files = [...e.target.files];
+        e.target.value = '';
+        for (const file of files) {
+          const fd = new FormData();
+          fd.append('shot', file);
+          try {
+            const r = await api('upload_screenshot', { form: fd });
+            if (!addShot(device, r.path)) break;
+            renderShots();
+          } catch (err) { handleError(err); break; }
+        }
+      });
+    });
+
     function openEditor(it) {
       form.reset();
       $('#editError').textContent = '';
@@ -429,6 +522,11 @@
       f.status.value = it?.status ?? 'published';
       f.popular.checked = !!it?.featured?.popular;
       f.editors_choice.checked = !!it?.featured?.editors_choice;
+      f.rating_value.value = it?.rating?.value || '';
+      f.rating_count.value = it?.rating?.count || '';
+      shots.screenshots = [...(it?.screenshots ?? [])];
+      shots.ipad_screenshots = [...(it?.ipad_screenshots ?? [])];
+      renderShots();
 
       (it?.versions?.length ? it.versions : [{ release_date: new Date().toISOString().slice(0, 10) }]).forEach(addVersion);
       updateIconPreview();
@@ -451,6 +549,10 @@
         status: f.status.value,
         popular: f.popular.checked,
         editors_choice: f.editors_choice.checked,
+        rating_value: f.rating_value.value,
+        rating_count: f.rating_count.value,
+        screenshots: shots.screenshots,
+        ipad_screenshots: shots.ipad_screenshots,
         versions: [...document.querySelectorAll('#versions .ver-edit')].map(box => {
           const v = {};
           box.querySelectorAll('[data-k]').forEach(i => { v[i.dataset.k] = i.value.trim(); });

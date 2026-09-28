@@ -10,6 +10,7 @@ header('X-Content-Type-Options: nosniff');
 date_default_timezone_set('UTC');
 
 const ICON_DIR   = __DIR__ . '/uploads/icons';
+const SHOT_DIR   = __DIR__ . '/uploads/screenshots';
 const AVATAR_DIR = __DIR__ . '/uploads/avatars';
 // Admin login and database live in config.php (git-ignored). Copy config.example.php to create it.
 $config = is_file(__DIR__ . '/config.php') ? require __DIR__ . '/config.php' : [];
@@ -42,6 +43,7 @@ const LIMIT_MAIL_TO = [5, 60 * 60];        // code emails to one address
 const LIMIT_CHAT = [20, 5 * 60];           // support chat messages per member
 
 const CHAT_MAX_LEN = 2000;                 // characters per support message
+const MAX_SHOTS = 20;                      // screenshots per device on one item
 
 // Store categories — offered in the admin panel even before any item uses them.
 const CATEGORIES = [
@@ -521,6 +523,8 @@ function save_item(array $it, ?int $id): int
         'min_ios' => $it['min_ios'],
         'is_popular' => (int)$it['featured']['popular'],
         'is_editors_choice' => (int)$it['featured']['editors_choice'],
+        'rating_value' => $it['rating']['value'],
+        'rating_count' => $it['rating']['count'],
         'license_type' => $license,
         'latest_version' => $it['latest_version'],
         'latest_size_mb' => $latest['size_mb'] ?? 0,
@@ -545,7 +549,44 @@ function save_item(array $it, ?int $id): int
     foreach ($it['versions'] as $v) {
         $add->execute([$id, $v['version'], $v['release_date'] ?: null, $v['size_mb'] ?? 0, $v['changelog'], $v['download_url']]);
     }
+
+    // Screenshots: replaced as a whole, in the order given.
+    $old = db()->prepare('SELECT url FROM game_screenshots WHERE game_id=?');
+    $old->execute([$id]);
+    $oldUrls = $old->fetchAll(PDO::FETCH_COLUMN);
+    db()->prepare('DELETE FROM game_screenshots WHERE game_id=?')->execute([$id]);
+    $add = db()->prepare('INSERT INTO game_screenshots (game_id,device,url,sort) VALUES (?,?,?,?)');
+    foreach (['iphone' => $it['screenshots'], 'ipad' => $it['ipad_screenshots']] as $device => $urls) {
+        foreach (array_values($urls) as $i => $url) $add->execute([$id, $device, $url, $i]);
+    }
+    foreach (array_diff($oldUrls, $it['screenshots'], $it['ipad_screenshots']) as $url) remove_unused_upload($url);
     return $id;
+}
+
+/** Deletes an uploaded icon / screenshot file once no game uses it any more (outside links are left alone). */
+function remove_unused_upload(?string $url): void
+{
+    $path = ltrim(str_replace(site_url() . '/', '', (string)$url), '/');
+    if (!preg_match('~^uploads/(icons|screenshots)/[\w-]+\.(png|jpe?g|webp|gif)$~', $path)) return;
+    $like = '%' . $path;
+    $st = db()->prepare('SELECT (SELECT COUNT(*) FROM games WHERE icon LIKE ?) + (SELECT COUNT(*) FROM game_screenshots WHERE url LIKE ?)');
+    $st->execute([$like, $like]);
+    if (!$st->fetchColumn()) @unlink(__DIR__ . '/' . $path);
+}
+
+/** Saves an uploaded image into $dir under a random name and returns its public URL. */
+function store_upload_image(?array $f, string $dir, int $maxMb, string $label): string
+{
+    if (!$f || $f['error'] !== UPLOAD_ERR_OK) throw new ApiError('Upload failed', 400);
+    if ($f['size'] > $maxMb * 1024 * 1024) throw new ApiError("$label must be under $maxMb MB", 422);
+    $info = @getimagesize($f['tmp_name']);
+    $exts = [IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'webp', IMAGETYPE_GIF => 'gif'];
+    $ext = $exts[$info[2] ?? 0] ?? null;
+    if (!$ext) throw new ApiError("$label must be PNG, JPG, WEBP or GIF", 422);
+    if (!is_dir($dir)) mkdir($dir, 0775, true);
+    $name = bin2hex(random_bytes(8)) . '.' . $ext;
+    if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) throw new ApiError("Could not save $label", 500);
+    return site_url() . '/uploads/' . basename($dir) . '/' . $name;
 }
 
 function str_in(array $in, string $key, int $max): string
@@ -598,6 +639,29 @@ function clean_item(array $in, ?array $existing): array
         'popular' => !empty($in['popular']),
         'editors_choice' => !empty($in['editors_choice']),
     ];
+
+    // Rating and screenshots: only changed when sent, so other callers keep what is stored.
+    $item['rating'] ??= ['value' => 0.0, 'count' => 0];
+    if (array_key_exists('rating_value', $in)) {
+        $r = trim((string)$in['rating_value']);
+        if ($r !== '' && (!is_numeric($r) || $r < 0 || $r > 5)) throw new ApiError('Rating must be between 0 and 5', 422);
+        $item['rating']['value'] = round((float)$r, 2);
+    }
+    if (array_key_exists('rating_count', $in)) {
+        $c = trim((string)$in['rating_count']);
+        if ($c !== '' && !preg_match('/^\d{1,9}$/', $c)) throw new ApiError('Rating count must be a whole number', 422);
+        $item['rating']['count'] = (int)$c;
+    }
+    foreach (['screenshots' => 'iPhone', 'ipad_screenshots' => 'iPad'] as $key => $label) {
+        if (!array_key_exists($key, $in)) { $item[$key] ??= []; continue; }
+        $urls = [];
+        foreach ((array)$in[$key] as $u) {
+            $u = clean_url(mb_substr(trim((string)$u), 0, 500), "$label screenshot");
+            if ($u !== '' && !in_array($u, $urls, true)) $urls[] = $u;
+        }
+        if (count($urls) > MAX_SHOTS) throw new ApiError('Up to ' . MAX_SHOTS . " $label screenshots", 422);
+        $item[$key] = $urls;
+    }
 
     $versions = [];
     foreach ((array)($in['versions'] ?? []) as $v) {
@@ -1052,13 +1116,8 @@ try {
             $removed = find_item($id, null) ?? throw new ApiError('Not found', 404);
             // Versions and screenshots go with it (ON DELETE CASCADE).
             db()->prepare('DELETE FROM games WHERE id=?')->execute([$id]);
-            // Remove the uploaded icon if nothing else uses it.
-            $icon = ltrim(str_replace(site_url() . '/', '', (string)$removed['icon']), '/');
-            if (preg_match('~^uploads/icons/[\w-]+\.(png|jpe?g|webp|gif)$~', $icon)) {
-                $st = db()->prepare('SELECT COUNT(*) FROM games WHERE icon LIKE ?');
-                $st->execute(['%' . $icon]);
-                if (!$st->fetchColumn()) @unlink(__DIR__ . '/' . $icon);
-            }
+            // Remove its uploaded icon and screenshots if nothing else uses them.
+            foreach ([$removed['icon'], ...$removed['screenshots'], ...$removed['ipad_screenshots']] as $url) remove_unused_upload($url);
             respond(['ok' => true]);
 
         /* ---------- Admin: store users ---------- */
@@ -1214,17 +1273,12 @@ try {
         case 'upload_icon':
             require_post();
             require_admin();
-            $f = $_FILES['icon'] ?? null;
-            if (!$f || $f['error'] !== UPLOAD_ERR_OK) throw new ApiError('Upload failed', 400);
-            if ($f['size'] > 2 * 1024 * 1024) throw new ApiError('Icon must be under 2 MB', 422);
-            $info = @getimagesize($f['tmp_name']);
-            $exts = [IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'webp', IMAGETYPE_GIF => 'gif'];
-            $ext = $exts[$info[2] ?? 0] ?? null;
-            if (!$ext) throw new ApiError('Icon must be PNG, JPG, WEBP or GIF', 422);
-            if (!is_dir(ICON_DIR)) mkdir(ICON_DIR, 0775, true);
-            $name = bin2hex(random_bytes(8)) . '.' . $ext;
-            if (!move_uploaded_file($f['tmp_name'], ICON_DIR . '/' . $name)) throw new ApiError('Could not save icon', 500);
-            respond(['path' => site_url() . '/uploads/icons/' . $name]);
+            respond(['path' => store_upload_image($_FILES['icon'] ?? null, ICON_DIR, 2, 'Icon')]);
+
+        case 'upload_screenshot':
+            require_post();
+            require_admin();
+            respond(['path' => store_upload_image($_FILES['shot'] ?? null, SHOT_DIR, 5, 'Screenshot')]);
 
         default:
             throw new ApiError('Unknown action', 400);
