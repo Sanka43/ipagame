@@ -10,6 +10,7 @@ header('X-Content-Type-Options: nosniff');
 date_default_timezone_set('UTC');
 
 const ICON_DIR   = __DIR__ . '/uploads/icons';
+const AVATAR_DIR = __DIR__ . '/uploads/avatars';
 // Admin login and database live in config.php (git-ignored). Copy config.example.php to create it.
 $config = is_file(__DIR__ . '/config.php') ? require __DIR__ . '/config.php' : [];
 define('ADMIN_USER', (string)($config['admin_user'] ?? ''));
@@ -22,6 +23,8 @@ define('DB', (array)($config['db'] ?? []) + ['host' => '127.0.0.1', 'name' => 'i
 define('SITE_URL', rtrim((string)($config['site_url'] ?? ''), '/'));
 // SMTP mailbox that sends verification emails (see config.example.php). Missing = write to data/mail/ (dev).
 define('MAIL', (array)($config['mail'] ?? []) + ['from' => 'info@ipagame.store', 'from_name' => 'Game Store']);
+// OAuth client ID for "Continue with Google" (Google Cloud Console → Credentials). Empty = button hidden.
+define('GOOGLE_CLIENT_ID', trim((string)($config['google_client_id'] ?? '')));
 require __DIR__ . '/mailer.php';
 
 const VERIFY_TTL = 15 * 60;      // a code is valid for 15 minutes
@@ -68,7 +71,7 @@ function require_admin(): void
 function current_user(): ?array
 {
     if (empty($_SESSION['user_id'])) return null;
-    $st = db()->prepare('SELECT id, username, email, created_at, disabled_at, email_verified_at FROM users WHERE id=?');
+    $st = db()->prepare('SELECT id, username, email, created_at, disabled_at, email_verified_at, avatar_url, google_sub FROM users WHERE id=?');
     $st->execute([$_SESSION['user_id']]);
     $u = $st->fetch();
     // Deleted, disabled or un-verified by an admin: signed out at once.
@@ -77,7 +80,93 @@ function current_user(): ?array
         return null;
     }
     return ['id' => (int)$u['id'], 'username' => $u['username'], 'email' => $u['email'], 'created_at' => iso_date($u['created_at']),
-            'avatar' => gravatar_url($u['email'])];
+            'avatar' => avatar_of($u), 'custom_avatar' => is_uploaded_avatar($u['avatar_url'] ?? null),
+            'google' => !empty($u['google_sub'])];
+}
+
+/** The picture to show: an uploaded or Google photo if there is one, else the email's Gravatar. */
+function avatar_of(array $u): string
+{
+    return ($u['avatar_url'] ?? '') !== '' ? $u['avatar_url'] : gravatar_url($u['email']);
+}
+
+function is_uploaded_avatar(?string $url): bool
+{
+    return (bool)preg_match('~^uploads/avatars/[a-f0-9]{16}\.(jpg|png|webp|gif)$~', (string)$url);
+}
+
+/** Deletes an uploaded avatar file (Google / Gravatar links are left alone). */
+function remove_avatar_file(?string $url): void
+{
+    if (is_uploaded_avatar($url)) @unlink(__DIR__ . '/' . $url);
+}
+
+/** Saves an uploaded image as the user's avatar: a 256px square JPEG when GD is available. */
+function store_avatar(array $f): string
+{
+    if ($f['error'] !== UPLOAD_ERR_OK) throw new ApiError('Upload failed', 400);
+    if ($f['size'] > 5 * 1024 * 1024) throw new ApiError('Photo must be under 5 MB', 422);
+    $info = @getimagesize($f['tmp_name']);
+    $exts = [IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'webp', IMAGETYPE_GIF => 'gif'];
+    $ext = $exts[$info[2] ?? 0] ?? null;
+    if (!$ext) throw new ApiError('Photo must be PNG, JPG, WEBP or GIF', 422);
+    if (!is_dir(AVATAR_DIR)) mkdir(AVATAR_DIR, 0775, true);
+    $name = bin2hex(random_bytes(8));
+
+    // Re-encoding also drops anything hidden in the file (EXIF location, appended data).
+    $load = ['png' => 'imagecreatefrompng', 'jpg' => 'imagecreatefromjpeg', 'webp' => 'imagecreatefromwebp', 'gif' => 'imagecreatefromgif'][$ext];
+    if (function_exists($load) && function_exists('imagecreatetruecolor') && ($img = @$load($f['tmp_name']))) {
+        [$w, $h] = [imagesx($img), imagesy($img)];
+        $side = min($w, $h);
+        $out = imagecreatetruecolor(256, 256);
+        imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));   // transparent PNGs on white
+        imagecopyresampled($out, $img, 0, 0, intdiv($w - $side, 2), intdiv($h - $side, 2), 256, 256, $side, $side);
+        $path = "uploads/avatars/$name.jpg";
+        if (!imagejpeg($out, __DIR__ . '/' . $path, 86)) throw new ApiError('Could not save photo', 500);
+        return $path;
+    }
+    if ($f['size'] > 2 * 1024 * 1024) throw new ApiError('Photo must be under 2 MB', 422);
+    $path = "uploads/avatars/$name.$ext";
+    if (!move_uploaded_file($f['tmp_name'], __DIR__ . '/' . $path)) throw new ApiError('Could not save photo', 500);
+    return $path;
+}
+
+/**
+ * Checks a Google Sign-In ID token with Google and returns its claims
+ * (sub, email, email_verified, name, picture), or throws.
+ */
+function google_claims(string $credential): array
+{
+    if (GOOGLE_CLIENT_ID === '') throw new ApiError('Google sign-in is not set up', 400);
+    if (!preg_match('/^[\w-]+\.[\w-]+\.[\w-]+$/', $credential)) throw new ApiError('Google sign-in failed. Try again.', 401);
+    $ch = curl_init('https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode($credential));
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10, CURLOPT_CONNECTTIMEOUT => 5]);
+    $raw = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $c = is_string($raw) ? json_decode($raw, true) : null;
+    if ($code !== 200 || !is_array($c)) throw new ApiError('Google sign-in failed. Try again.', 401);
+    // The token must be for this site, issued by Google, unexpired and carry a verified email.
+    if (($c['aud'] ?? '') !== GOOGLE_CLIENT_ID
+        || !in_array($c['iss'] ?? '', ['accounts.google.com', 'https://accounts.google.com'], true)
+        || (int)($c['exp'] ?? 0) < time()
+        || empty($c['sub']) || empty($c['email'])
+        || !in_array($c['email_verified'] ?? '', [true, 'true'], true)) {
+        throw new ApiError('Google sign-in failed. Try again.', 401);
+    }
+    return $c;
+}
+
+/** A free username based on the Google name or the email's first part. */
+function username_from(string $name, string $email): string
+{
+    $base = trim((string)preg_replace('/[^A-Za-z0-9]+/', '_', $name !== '' ? $name : strtok($email, '@')), '_');
+    $base = substr($base, 0, 24);
+    if (strlen($base) < 3) $base = 'player';
+    $st = db()->prepare('SELECT 1 FROM users WHERE username=?');
+    $try = $base;
+    for ($n = 2; $st->execute([$try]) && $st->fetchColumn(); $n++) $try = $base . '_' . $n;
+    return $try;
 }
 
 // Profile picture linked to the email on gravatar.com; d=404 lets the page fall back to the initial.
@@ -632,7 +721,7 @@ try {
 
         case 'me':
             $pending = pending_user();
-            respond(['admin' => is_admin(), 'user' => current_user(),
+            respond(['admin' => is_admin(), 'user' => current_user(), 'google_client_id' => GOOGLE_CLIENT_ID,
                      'pending' => $pending ? ['email' => $pending['email'], 'resend_in' => resend_wait($pending)] : null]);
 
         case 'register':
@@ -748,6 +837,60 @@ try {
             login_user((int)$u['id']);
             respond(['user' => current_user()]);
 
+        // "Continue with Google": signs in the account with this Google ID or email, or creates one.
+        case 'google_login':
+            require_post();
+            $c = google_claims((string)(body()['credential'] ?? ''));
+            $email = mb_strtolower(trim((string)$c['email']));
+            $picture = preg_match('~^https://[\w.-]+\.googleusercontent\.com/~', (string)($c['picture'] ?? '')) ? (string)$c['picture'] : '';
+            $st = db()->prepare('SELECT * FROM users WHERE google_sub=? OR email=? ORDER BY google_sub=? DESC LIMIT 1');
+            $st->execute([$c['sub'], $email, $c['sub']]);
+            $u = $st->fetch();
+            if ($u) {
+                if ($u['disabled_at']) throw new ApiError('This account has been disabled. Contact support if you think this is a mistake.', 403);
+                // Google has confirmed the email, so link it and count it as verified.
+                $set = ['google_sub' => $c['sub'], 'email_verified_at' => $u['email_verified_at'] ?: gmdate('Y-m-d H:i:s')];
+                // An unverified sign-up with this email may have been made by someone else, who would
+                // know its password: throw that password away ("Forgot password" sets a new one).
+                if (!$u['email_verified_at']) $set['password_hash'] = password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT);
+                // Keep a photo the user uploaded; otherwise follow their current Google photo.
+                if ($picture !== '' && !is_uploaded_avatar($u['avatar_url'])) $set['avatar_url'] = $picture;
+                db()->prepare('UPDATE users SET ' . implode(',', array_map(fn($k) => "$k=?", array_keys($set))) . ' WHERE id=?')
+                    ->execute([...array_values($set), $u['id']]);
+                $id = (int)$u['id'];
+            } else {
+                rate_check('signup:' . client_ip(), LIMIT_SIGNUPS, 'Too many new accounts from your network. Try again later.');
+                // No password yet (a random one nobody knows); "Forgot password" can set one later.
+                db()->prepare('INSERT INTO users (username, email, password_hash, created_at, email_verified_at, google_sub, avatar_url)
+                               VALUES (?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?, ?)')
+                    ->execute([username_from((string)($c['name'] ?? ''), $email), $email,
+                               password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT), $c['sub'], $picture ?: null]);
+                $id = (int)db()->lastInsertId();
+                rate_hit('signup:' . client_ip());
+            }
+            login_user($id);
+            respond(['user' => current_user(), 'created' => !$u]);
+
+        case 'upload_avatar':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Login required', 401);
+            $path = store_avatar($_FILES['avatar'] ?? ['error' => UPLOAD_ERR_NO_FILE]);
+            $st = db()->prepare('SELECT avatar_url FROM users WHERE id=?');
+            $st->execute([$me['id']]);
+            $old = $st->fetchColumn();
+            db()->prepare('UPDATE users SET avatar_url=? WHERE id=?')->execute([$path, $me['id']]);
+            remove_avatar_file($old ?: null);
+            respond(['user' => current_user()]);
+
+        case 'remove_avatar':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Login required', 401);
+            $st = db()->prepare('SELECT avatar_url FROM users WHERE id=?');
+            $st->execute([$me['id']]);
+            remove_avatar_file($st->fetchColumn() ?: null);
+            db()->prepare('UPDATE users SET avatar_url=NULL WHERE id=?')->execute([$me['id']]);
+            respond(['user' => current_user()]);
+
         case 'delete_account':
             require_post();
             $me = current_user() ?? throw new ApiError('Login required', 401);
@@ -758,6 +901,9 @@ try {
                 rate_hit('login:' . client_ip());
                 throw new ApiError('Wrong password', 401);
             }
+            $st = db()->prepare('SELECT avatar_url FROM users WHERE id=?');
+            $st->execute([$me['id']]);
+            remove_avatar_file($st->fetchColumn() ?: null);
             db()->prepare('DELETE FROM users WHERE id=?')->execute([$me['id']]);
             unset($_SESSION['user_id'], $_SESSION['pending_user_id'], $_SESSION['reset_email']);
             session_regenerate_id(true);
@@ -831,13 +977,14 @@ try {
         /* ---------- Admin: store users ---------- */
         case 'admin_users':
             require_admin();
-            $rows = db()->query('SELECT id, username, email, created_at, last_login_at, email_verified_at, disabled_at
+            $rows = db()->query('SELECT id, username, email, created_at, last_login_at, email_verified_at, disabled_at, avatar_url, google_sub
                                  FROM users ORDER BY created_at DESC, id DESC')->fetchAll();
             respond(['users' => array_map(fn($u) => [
                 'id' => (int)$u['id'],
                 'username' => $u['username'],
                 'email' => $u['email'],
-                'avatar' => gravatar_url($u['email']),
+                'avatar' => avatar_of($u),
+                'google' => !empty($u['google_sub']),
                 'created_at' => iso_date($u['created_at']),
                 'last_login_at' => iso_date($u['last_login_at']),
                 'verified_at' => iso_date($u['email_verified_at']),
@@ -886,9 +1033,14 @@ try {
         case 'admin_user_delete':
             require_post();
             require_admin();
+            $id = (int)(body()['id'] ?? 0);
+            $st = db()->prepare('SELECT avatar_url FROM users WHERE id=?');
+            $st->execute([$id]);
+            $avatar = $st->fetchColumn();
             $st = db()->prepare('DELETE FROM users WHERE id=?');
-            $st->execute([(int)(body()['id'] ?? 0)]);
+            $st->execute([$id]);
             if (!$st->rowCount()) throw new ApiError('User not found', 404);
+            remove_avatar_file($avatar ?: null);
             respond(['ok' => true]);
 
         case 'upload_icon':

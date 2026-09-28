@@ -115,11 +115,11 @@ function tabBarHTML(active = '') {
     </a>`).join('');
 }
 
-// Profile picture: the Gravatar of the account's email, or the username's initial when there is none.
+// Profile picture: the uploaded / Google photo or Gravatar, over the username's initial (shown if it fails).
 function avatarHTML(user) {
   const initial = esc((user.username || '?').charAt(0).toUpperCase());
   if (!user.avatar) return `<span class="avatar-initial">${initial}</span>`;
-  return `<span class="avatar-initial">${initial}</span><img src="${esc(user.avatar)}" alt="" referrerpolicy="no-referrer"
+  return `<span class="avatar-initial">${initial}</span><img src="${esc(asset(user.avatar))}" alt="" referrerpolicy="no-referrer"
     onload="this.classList.add('ok')" onerror="this.remove()">`;
 }
 
