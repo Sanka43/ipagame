@@ -10,7 +10,7 @@
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20260928c">
+  <link rel="stylesheet" href="assets/style.css?v=20260928d">
 </head>
 <body data-auth="required">
   <main class="wrap">
@@ -40,7 +40,8 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20260928c"></script>
+  <script src="assets/common.js?v=20260928d"></script>
+  <script src="assets/chat.js?v=20260928d"></script>
   <script>
     const $ = s => document.querySelector(s);
     const PER_PAGE = 24;
@@ -472,6 +473,7 @@
     window.addEventListener('popstate', () => { readUrl(); load(); });
 
     mountAccountButton();
+    mountChat();
     readUrl();
     load();
   </script>

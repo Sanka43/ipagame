@@ -8,7 +8,7 @@
   <link rel="icon" href="../assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="../assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css?v=20260928c">
+  <link rel="stylesheet" href="../assets/style.css?v=20260928d">
 </head>
 <body>
   <!-- Login -->
@@ -49,6 +49,7 @@
       <nav class="admin-tabs" role="tablist" aria-label="Sections">
         <button type="button" role="tab" data-pane="games" aria-selected="true">Games</button>
         <button type="button" role="tab" data-pane="users" aria-selected="false">Users <span class="tab-n" id="usersCount"></span></button>
+        <button type="button" role="tab" data-pane="support" aria-selected="false">Support <span class="sp-n" id="supportCount" hidden></span></button>
       </nav>
 
       <section id="gamesPane">
@@ -91,6 +92,40 @@
           </select>
         </div>
         <div class="admin-list" id="uList"></div>
+      </section>
+
+      <!-- Support chat -->
+      <section id="supportPane" hidden>
+        <div class="sp" id="sp">
+          <aside class="sp-list">
+            <div class="toolbar">
+              <label class="search">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input id="spq" type="search" placeholder="Search chats" autocomplete="off" aria-label="Search chats">
+              </label>
+              <select class="input u-filter" id="spFilter" aria-label="Filter chats">
+                <option value="open">Open</option>
+                <option value="unread">Unread</option>
+                <option value="closed">Resolved</option>
+                <option value="">All</option>
+              </select>
+            </div>
+            <div class="sp-threads" id="spThreads"></div>
+          </aside>
+          <div class="sp-conv">
+            <p class="sp-pick" id="spPick">Pick a chat to reply.</p>
+            <header class="chat-head" id="spHead" hidden>
+              <button type="button" class="icon-btn sp-back" id="spBack" aria-label="Back to chats">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>
+              </button>
+              <span class="u-avatar" id="spAvatar"></span>
+              <div class="chat-title"><strong id="spName"></strong><span id="spEmail"></span></div>
+              <button type="button" class="btn sm ghost" id="spStatus"></button>
+            </header>
+            <div class="chat-log" id="spLog" aria-live="polite" hidden></div>
+            <form class="chat-form" id="spForm" hidden></form>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -222,6 +257,7 @@
       </div>
       <div class="sheet-foot">
         <button type="button" class="btn danger" id="uDelete">Delete</button>
+        <button type="button" class="btn ghost" id="uMessage">Message</button>
         <p class="error" id="uError" style="flex:1;margin:0"></p>
         <button type="button" class="btn ghost" data-close>Cancel</button>
         <button type="submit" class="btn" id="uSave">Save</button>
@@ -230,7 +266,8 @@
   </dialog>
 
   <script>window.API_BASE = '../';</script>
-  <script src="../assets/common.js?v=20260928c"></script>
+  <script src="../assets/common.js?v=20260928d"></script>
+  <script src="../assets/chat.js?v=20260928d"></script>
   <script>
     const $ = s => document.querySelector(s);
     const form = $('#editForm');
@@ -247,8 +284,9 @@
     async function showDash() {
       $('#loginView').hidden = true;
       $('#dashView').hidden = false;
-      showPane(location.hash === '#users' ? 'users' : 'games');
+      showPane(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'games');
       if (!usersLoaded && location.hash !== '#users') refreshUsers();
+      pollChats();
       await refresh();
     }
 
@@ -464,6 +502,8 @@
       }
     });
 
+    const PANES = ['games', 'users', 'support'];
+
     /* ---------- Store users ---------- */
     let users = [];
     let usersLoaded = false;
@@ -473,10 +513,10 @@
 
     function showPane(name) {
       document.querySelectorAll('.admin-tabs [data-pane]').forEach(b => b.setAttribute('aria-selected', b.dataset.pane === name));
-      $('#gamesPane').hidden = name !== 'games';
-      $('#usersPane').hidden = name !== 'users';
-      history.replaceState(null, '', name === 'users' ? '#users' : location.pathname);
+      for (const p of PANES) $('#' + p + 'Pane').hidden = p !== name;
+      history.replaceState(null, '', name === 'games' ? location.pathname : '#' + name);
       if (name === 'users' && !usersLoaded) refreshUsers();
+      if (name === 'support') { pollChats(); pollConv(); }
     }
     $('.admin-tabs').addEventListener('click', e => {
       const b = e.target.closest('[data-pane]');
@@ -614,6 +654,162 @@
         if (err.status === 401) { uSheet.close(); showLogin(); }
         else $('#uError').textContent = err.message;
       }
+    });
+
+    $('#uMessage').addEventListener('click', () => {
+      uSheet.close();
+      showPane('support');
+      openChat(editing.id, editing);
+    });
+
+    /* ---------- Support chat ---------- */
+    const sp = { chats: [], loaded: false, userId: null, messages: [], seen: 0, status: 'open', listTimer: 0, convTimer: 0, busy: false };
+    const baseTitle = document.title;
+
+    function onSupport() { return !$('#supportPane').hidden && !$('#dashView').hidden; }
+
+    // Chat list: every 8 s while the Support tab is open, every 30 s otherwise (for the unread badge).
+    async function pollChats() {
+      clearTimeout(sp.listTimer);
+      if ($('#dashView').hidden) return;
+      if (!document.hidden) {
+        try {
+          sp.chats = (await api('admin_chats')).chats;
+          sp.loaded = true;
+          renderChats();
+        } catch (err) {
+          if (err.status === 401) return showLogin();
+        }
+      }
+      sp.listTimer = setTimeout(pollChats, onSupport() ? 8000 : 30000);
+    }
+
+    function renderChats() {
+      const unread = sp.chats.reduce((n, c) => n + c.unread, 0);
+      $('#supportCount').hidden = !unread;
+      $('#supportCount').textContent = unread;
+      document.title = (unread ? `(${unread}) ` : '') + baseTitle;
+      if (!sp.loaded) return;
+
+      const q = $('#spq').value.trim().toLowerCase();
+      const f = $('#spFilter').value;
+      const list = sp.chats.filter(c => (f === '' || (f === 'unread' ? c.unread : c.status === f)) &&
+        (!q || (c.user.username + ' ' + c.user.email + ' ' + c.last).toLowerCase().includes(q)));
+      $('#spThreads').innerHTML = list.length ? list.map(c => `<button type="button" class="sp-thread${c.unread ? ' unread' : ''}${c.status === 'closed' ? ' closed' : ''}"
+          data-chat="${c.user.id}" aria-current="${c.user.id === sp.userId}">
+          <span class="u-avatar">${avatarHTML(c.user)}</span>
+          <span class="row-info">
+            <span class="row-name"><span>${esc(c.user.username)}</span><time>${esc(ago(c.last_at))}</time></span>
+            <span class="row-sub">${c.last_from === 'admin' ? 'You: ' : ''}${esc(c.last)}</span>
+          </span>
+          ${c.unread ? `<span class="sp-n">${c.unread}</span>` : ''}
+        </button>`).join('')
+        : `<p class="empty">${sp.chats.length ? 'No chats here.' : 'No one has messaged support yet.'}</p>`;
+    }
+
+    $('#spq').addEventListener('input', renderChats);
+    $('#spFilter').addEventListener('change', renderChats);
+    $('#spThreads').addEventListener('click', e => {
+      const b = e.target.closest('[data-chat]');
+      if (b) openChat(Number(b.dataset.chat));
+    });
+
+    function paintHead(user) {
+      $('#spAvatar').innerHTML = avatarHTML(user);
+      $('#spName').textContent = user.username + (user.disabled || user.disabled_at ? ' (disabled)' : '');
+      $('#spEmail').textContent = user.email;
+      $('#spStatus').textContent = sp.status === 'closed' ? 'Reopen' : 'Resolve';
+    }
+
+    // `user` (optional) fills the header at once, before the chat has loaded.
+    async function openChat(userId, user) {
+      sp.userId = userId;
+      sp.messages = [];
+      sp.seen = 0;
+      sp.status = 'open';
+      $('#sp').classList.add('has-conv');
+      $('#spPick').hidden = true;
+      $('#spHead').hidden = $('#spLog').hidden = $('#spForm').hidden = false;
+      $('#spLog').innerHTML = '<div class="chat-loading" role="status" aria-label="Loading"></div>';
+      composer.reset();
+      const known = user || sp.chats.find(c => c.user.id === userId)?.user;
+      if (known) paintHead(known);
+      renderChats();
+      await pollConv(true);
+      if (matchMedia('(hover: hover)').matches) composer.focus();
+    }
+
+    function closeChat() {
+      sp.userId = null;
+      clearTimeout(sp.convTimer);
+      $('#sp').classList.remove('has-conv');
+      $('#spPick').hidden = false;
+      $('#spHead').hidden = $('#spLog').hidden = $('#spForm').hidden = true;
+      renderChats();
+    }
+    $('#spBack').addEventListener('click', closeChat);
+
+    // Open chat: new messages every 3 s while the Support tab is showing.
+    async function pollConv(first = false) {
+      clearTimeout(sp.convTimer);
+      const id = sp.userId;
+      if (!id || !onSupport()) return;
+      if (!document.hidden && !sp.busy) {
+        sp.busy = true;
+        try {
+          const after = sp.messages.length ? sp.messages[sp.messages.length - 1].id : 0;
+          const r = await api('admin_chat', { params: { user_id: id, after } });
+          if (sp.userId !== id) return;                 // switched to another chat meanwhile
+          addMessages(r.messages);
+          sp.seen = r.seen;
+          sp.status = r.status;
+          paintHead(r.user);
+          chatPaint($('#spLog'), sp.messages.length ? chatLogHTML(sp.messages, 'admin', sp.seen)
+            : '<p class="empty">No messages yet. Say hello!</p>', first);
+          // Reading clears this chat's unread count without waiting for the next list refresh.
+          const c = sp.chats.find(c => c.user.id === id);
+          if (c && c.unread) { c.unread = 0; renderChats(); }
+        } catch (err) {
+          if (err.status === 401) return showLogin();
+          if (first) toast(err.message, true);
+        } finally {
+          sp.busy = false;
+        }
+      }
+      if (sp.userId === id) sp.convTimer = setTimeout(pollConv, 3000);
+    }
+
+    function addMessages(list) {
+      const have = new Set(sp.messages.map(m => m.id));
+      sp.messages.push(...list.filter(m => !have.has(m.id)));
+      sp.messages.sort((a, b) => a.id - b.id);
+    }
+
+    $('#spForm').innerHTML = composerHTML('Reply');
+    const composer = chatComposer($('#spForm'), async text => {
+      const r = await api('admin_chat_send', { body: { user_id: sp.userId, body: text } });
+      addMessages([r.message]);
+      sp.status = 'open';                               // a new message reopens a resolved chat
+      $('#spStatus').textContent = 'Resolve';
+      chatPaint($('#spLog'), chatLogHTML(sp.messages, 'admin', sp.seen), true);
+      pollChats();
+    });
+
+    $('#spStatus').addEventListener('click', async () => {
+      const status = sp.status === 'closed' ? 'open' : 'closed';
+      try {
+        await api('admin_chat_status', { body: { user_id: sp.userId, status } });
+        sp.status = status;
+        $('#spStatus').textContent = status === 'closed' ? 'Reopen' : 'Resolve';
+        toast(status === 'closed' ? 'Marked as resolved' : 'Reopened');
+        pollChats();
+      } catch (err) { handleError(err); }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden || $('#dashView').hidden) return;
+      pollChats();
+      pollConv();
     });
 
     /* ---------- Boot ---------- */

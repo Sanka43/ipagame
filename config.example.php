@@ -23,7 +23,7 @@ return [
         'user' => 'info@ipagame.store',
         'pass' => '',
         'from' => 'info@ipagame.store',
-        'from_name' => 'Game Store',
+        'from_name' => 'IPA Game Store',
     ],
     // "Continue with Google": OAuth client ID (Web application) from Google Cloud Console → APIs & Services →
     // Credentials. Authorized JavaScript origins: https://app.ipagame.store (and http://localhost:8099 for dev).

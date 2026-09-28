@@ -22,7 +22,9 @@ define('DB', (array)($config['db'] ?? []) + ['host' => '127.0.0.1', 'name' => 'i
 // as absolute URLs so the other site can show them too.
 define('SITE_URL', rtrim((string)($config['site_url'] ?? ''), '/'));
 // SMTP mailbox that sends verification emails (see config.example.php). Missing = write to data/mail/ (dev).
-define('MAIL', (array)($config['mail'] ?? []) + ['from' => 'info@ipagame.store', 'from_name' => 'Game Store']);
+// Store name used in emails; also the default sender name.
+const BRAND = 'IPA Game Store';
+define('MAIL', (array)($config['mail'] ?? []) + ['from' => 'info@ipagame.store', 'from_name' => BRAND]);
 // OAuth client ID for "Continue with Google" (Google Cloud Console → Credentials). Empty = button hidden.
 define('GOOGLE_CLIENT_ID', trim((string)($config['google_client_id'] ?? '')));
 require __DIR__ . '/mailer.php';
@@ -37,6 +39,9 @@ const LIMIT_ADMIN_FAILS = [5, 15 * 60];    // wrong admin passwords per IP
 const LIMIT_SIGNUPS = [5, 60 * 60];        // new accounts per IP
 const LIMIT_MAIL_IP = [10, 60 * 60];       // code emails requested per IP
 const LIMIT_MAIL_TO = [5, 60 * 60];        // code emails to one address
+const LIMIT_CHAT = [20, 5 * 60];           // support chat messages per member
+
+const CHAT_MAX_LEN = 2000;                 // characters per support message
 
 // Store categories — offered in the admin panel even before any item uses them.
 const CATEGORIES = [
@@ -295,21 +300,26 @@ function send_code(array $u, string $kind): bool
                    {$kind}_sent_at=UTC_TIMESTAMP(), {$kind}_attempts=0 WHERE id=?")
         ->execute([password_hash($code, PASSWORD_DEFAULT), VERIFY_TTL, $u['id']]);
 
+    // Wording kept plain on purpose: no code in the subject and no links, which spam filters
+    // treat as phishing signs coming from a new domain.
+    $brand = BRAND;
     $copy = $kind === 'reset' ? [
-        'subject' => "$code is your Game Store password reset code",
-        'title' => 'Reset your password',
-        'intro' => 'enter this code to choose a new password.',
-        'ignore' => "If you didn't ask to reset your password, you can ignore this email. Your password won't change.",
+        'subject' => "Your $brand password reset code",
+        'title' => 'Your password reset code',
+        'intro' => 'here is the code to choose a new password for your account.',
+        'why' => "You're receiving this because a password reset was requested for your $brand account.",
+        'ignore' => "If that wasn't you, you can ignore this email. Your password won't change.",
     ] : [
-        'subject' => "$code is your Game Store verification code",
-        'title' => 'Verify your email address',
-        'intro' => 'enter this code to finish setting up your account.',
-        'ignore' => "If you didn't create a Game Store account, you can ignore this email.",
+        'subject' => "Your $brand sign-up code",
+        'title' => 'Your sign-up code',
+        'intro' => 'here is the code to finish creating your account.',
+        'why' => "You're receiving this because this email address was used to create an account at $brand.",
+        'ignore' => "If that wasn't you, you can ignore this email and no account will be set up.",
     ];
     $name = htmlspecialchars($u['username'], ENT_QUOTES);
     $mins = VERIFY_TTL / 60;
     $text = "Hi {$u['username']},\n\n" . ucfirst($copy['intro']) . "\n\n    $code\n\n"
-          . "The code expires in $mins minutes.\n\n{$copy['ignore']}\n\n— Game Store\n" . (SITE_URL !== '' ? SITE_URL . "/\n" : '');
+          . "The code expires in $mins minutes.\n\n{$copy['why']} {$copy['ignore']}\n\nThanks,\nThe $brand team\n";
     $html = <<<HTML
 <!doctype html>
 <html><body style="margin:0;padding:0;background:#f4f5f7">
@@ -317,7 +327,7 @@ function send_code(array $u, string $kind): bool
 <tr><td align="center">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111418">
     <tr><td style="padding:32px 32px 8px;text-align:center">
-      <div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7c3aed">Game Store</div>
+      <div style="font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7c3aed">$brand</div>
       <h1 style="margin:14px 0 6px;font-size:24px;line-height:1.25">{$copy['title']}</h1>
       <p style="margin:0;font-size:15px;line-height:1.5;color:#6b7280">Hi $name, {$copy['intro']}</p>
     </td></tr>
@@ -326,7 +336,7 @@ function send_code(array $u, string $kind): bool
       <p style="margin:14px 0 0;font-size:13px;color:#6b7280">This code expires in $mins minutes.</p>
     </td></tr>
     <tr><td style="padding:8px 32px 30px;text-align:center;font-size:13px;line-height:1.5;color:#9ca3af">
-      {$copy['ignore']}
+      {$copy['why']} {$copy['ignore']}
     </td></tr>
   </table>
 </td></tr>
@@ -647,6 +657,83 @@ function matches_filters(array $i, string $type, string $cat, string $q): bool
     if ($q === '') return true;
     $hay = implode(' ', [$i['name'] ?? '', $i['developer'] ?? '', $i['category'] ?? '', $i['short_description'] ?? '', ...(array)($i['tags'] ?? [])]);
     return str_contains(mb_strtolower($hay), $q);
+}
+
+/* ---------- Support chat (tables in sql/support_chat.sql) ---------- */
+
+/** The message text from a request body: trimmed, control characters removed, length-checked. */
+function chat_text(array $b): string
+{
+    $t = trim(preg_replace('/[^\P{C}\n\t]/u', '', str_replace("\r\n", "\n", (string)($b['body'] ?? ''))) ?? '');
+    if ($t === '') throw new ApiError('Type a message', 422);
+    if (mb_strlen($t) > CHAT_MAX_LEN) throw new ApiError('Messages can be up to ' . CHAT_MAX_LEN . ' characters', 422);
+    return $t;
+}
+
+function chat_thread(int $userId): ?array
+{
+    $st = db()->prepare('SELECT * FROM support_threads WHERE user_id=?');
+    $st->execute([$userId]);
+    return $st->fetch() ?: null;
+}
+
+function chat_row(array $m): array
+{
+    return ['id' => (int)$m['id'], 'from' => $m['from_admin'] ? 'admin' : 'user', 'body' => $m['body'], 'at' => iso_date($m['created_at'])];
+}
+
+/** Messages after id $after, oldest first. $after = 0: the latest 100 (the start of an open chat). */
+function chat_messages(int $userId, int $after): array
+{
+    if ($after > 0) {
+        $st = db()->prepare('SELECT * FROM support_messages WHERE user_id=? AND id>? ORDER BY id LIMIT 200');
+        $st->execute([$userId, $after]);
+        return array_map('chat_row', $st->fetchAll());
+    }
+    $st = db()->prepare('SELECT * FROM support_messages WHERE user_id=? ORDER BY id DESC LIMIT 100');
+    $st->execute([$userId]);
+    return array_map('chat_row', array_reverse($st->fetchAll()));
+}
+
+/** Records that one side has read up to message $id. */
+function chat_mark_read(int $userId, bool $admin, int $id): void
+{
+    $col = $admin ? 'admin_read_id' : 'user_read_id';
+    db()->prepare("UPDATE support_threads SET $col=GREATEST($col, ?) WHERE user_id=?")->execute([$id, $userId]);
+}
+
+/** Messages from the other side that this side hasn't read yet. */
+function chat_unread(int $userId, bool $admin): int
+{
+    $col = $admin ? 'admin_read_id' : 'user_read_id';
+    $st = db()->prepare("SELECT COUNT(*) FROM support_messages m JOIN support_threads t ON t.user_id=m.user_id
+                         WHERE m.user_id=? AND m.from_admin=? AND m.id > t.$col");
+    $st->execute([$userId, $admin ? 0 : 1]);
+    return (int)$st->fetchColumn();
+}
+
+/** Adds a message to a member's chat (opening the chat again if it was closed). */
+function chat_post(int $userId, bool $admin, string $text): array
+{
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('INSERT INTO support_messages (user_id, from_admin, body, created_at) VALUES (?, ?, ?, UTC_TIMESTAMP())')
+            ->execute([$userId, (int)$admin, $text]);
+        $id = (int)$pdo->lastInsertId();
+        // The sender has obviously read everything up to their own message.
+        $col = $admin ? 'admin_read_id' : 'user_read_id';
+        $pdo->prepare("INSERT INTO support_threads (user_id, status, last_message_at, $col) VALUES (?, 'open', UTC_TIMESTAMP(), ?)
+                       ON DUPLICATE KEY UPDATE status='open', last_message_at=VALUES(last_message_at), $col=VALUES($col)")
+            ->execute([$userId, $id]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+    $st = $pdo->prepare('SELECT * FROM support_messages WHERE id=?');
+    $st->execute([$id]);
+    return chat_row($st->fetch());
 }
 
 try {
@@ -1041,6 +1128,87 @@ try {
             $st->execute([$id]);
             if (!$st->rowCount()) throw new ApiError('User not found', 404);
             remove_avatar_file($avatar ?: null);
+            respond(['ok' => true]);
+
+        /* ---------- Support chat: member side ---------- */
+        // New messages after ?after=<id> (marked read). ?peek=1 only returns the unread count (chat closed).
+        // 403 rather than 401 so an admin browsing the store isn't sent to the sign-in page.
+        case 'chat':
+            $me = current_user() ?? throw new ApiError('Sign in to chat with support', 403);
+            $thread = chat_thread($me['id']);
+            $messages = [];
+            if ($thread && empty($_GET['peek'])) {
+                $messages = chat_messages($me['id'], max(0, (int)($_GET['after'] ?? 0)));
+                if ($messages) chat_mark_read($me['id'], false, end($messages)['id']);
+                $thread = chat_thread($me['id']);
+            }
+            respond(['messages' => $messages, 'unread' => $thread ? chat_unread($me['id'], false) : 0,
+                     'seen' => (int)($thread['admin_read_id'] ?? 0)]);
+
+        case 'chat_send':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Sign in to chat with support', 403);
+            $text = chat_text(body());
+            $key = 'chat:' . $me['id'];
+            rate_check($key, LIMIT_CHAT, 'You are sending messages too fast. Wait a few minutes.');
+            rate_hit($key);
+            respond(['message' => chat_post($me['id'], false, $text)]);
+
+        /* ---------- Support chat: admin side ---------- */
+        case 'admin_chats':
+            require_admin();
+            $rows = db()->query("SELECT t.*, u.username, u.email, u.avatar_url, u.disabled_at,
+                    (SELECT COUNT(*) FROM support_messages m WHERE m.user_id=t.user_id AND m.from_admin=0 AND m.id > t.admin_read_id) AS unread,
+                    (SELECT CONCAT(m.from_admin, ':', LEFT(m.body, 140)) FROM support_messages m WHERE m.user_id=t.user_id ORDER BY m.id DESC LIMIT 1) AS last
+                FROM support_threads t JOIN users u ON u.id=t.user_id
+                ORDER BY t.last_message_at DESC LIMIT 500")->fetchAll();
+            respond(['chats' => array_map(fn($r) => [
+                'user' => ['id' => (int)$r['user_id'], 'username' => $r['username'], 'email' => $r['email'],
+                           'avatar' => avatar_of($r), 'disabled' => (bool)$r['disabled_at']],
+                'status' => $r['status'],
+                'unread' => (int)$r['unread'],
+                'last_at' => iso_date($r['last_message_at']),
+                'last_from' => str_starts_with((string)$r['last'], '1:') ? 'admin' : 'user',
+                'last' => (string)substr((string)$r['last'], 2),
+            ], $rows)]);
+
+        // One member's chat: messages after ?after=<id> (marked read by the admin) + who they are.
+        case 'admin_chat':
+            require_admin();
+            $uid = (int)($_GET['user_id'] ?? 0);
+            $st = db()->prepare('SELECT id, username, email, avatar_url, disabled_at FROM users WHERE id=?');
+            $st->execute([$uid]);
+            $u = $st->fetch() ?: throw new ApiError('User not found', 404);
+            $thread = chat_thread($uid);
+            $messages = $thread ? chat_messages($uid, max(0, (int)($_GET['after'] ?? 0))) : [];
+            if ($messages) chat_mark_read($uid, true, end($messages)['id']);
+            respond([
+                'user' => ['id' => (int)$u['id'], 'username' => $u['username'], 'email' => $u['email'],
+                           'avatar' => avatar_of($u), 'disabled' => (bool)$u['disabled_at']],
+                'status' => $thread['status'] ?? 'open',
+                'seen' => (int)($thread['user_read_id'] ?? 0),
+                'messages' => $messages,
+            ]);
+
+        case 'admin_chat_send':
+            require_post();
+            require_admin();
+            $b = body();
+            $uid = (int)($b['user_id'] ?? 0);
+            $st = db()->prepare('SELECT 1 FROM users WHERE id=?');
+            $st->execute([$uid]);
+            if (!$st->fetchColumn()) throw new ApiError('User not found', 404);
+            respond(['message' => chat_post($uid, true, chat_text($b))]);
+
+        // Mark a chat as resolved ('closed') or open again. A new message from either side reopens it.
+        case 'admin_chat_status':
+            require_post();
+            require_admin();
+            $b = body();
+            $status = (string)($b['status'] ?? '');
+            if (!in_array($status, ['open', 'closed'], true)) throw new ApiError('Bad status', 422);
+            $st = db()->prepare('UPDATE support_threads SET status=? WHERE user_id=?');
+            $st->execute([$status, (int)($b['user_id'] ?? 0)]);
             respond(['ok' => true]);
 
         case 'upload_icon':
