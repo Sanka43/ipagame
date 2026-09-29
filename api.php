@@ -30,6 +30,9 @@ define('MAIL', (array)($config['mail'] ?? []) + ['from' => 'info@ipagame.store',
 define('GOOGLE_CLIENT_ID', trim((string)($config['google_client_id'] ?? '')));
 require __DIR__ . '/mailer.php';
 
+const REMEMBER_COOKIE = 'ipg_remember';
+const REMEMBER_TTL = 180 * 24 * 3600;   // members stay signed in for 180 days (renewed on use)
+
 const VERIFY_TTL = 15 * 60;      // a code is valid for 15 minutes
 const VERIFY_RESEND = 60;        // at most one email per minute
 const VERIFY_TRIES = 5;          // wrong guesses before a new code is needed
@@ -77,6 +80,7 @@ function require_admin(): void
 /** The logged-in store user (public fields only), or null. */
 function current_user(): ?array
 {
+    if (empty($_SESSION['user_id'])) restore_remembered();
     if (empty($_SESSION['user_id'])) return null;
     $st = db()->prepare('SELECT id, username, email, created_at, disabled_at, email_verified_at, avatar_url, google_sub FROM users WHERE id=?');
     $st->execute([$_SESSION['user_id']]);
@@ -84,6 +88,7 @@ function current_user(): ?array
     // Deleted, disabled or un-verified by an admin: signed out at once.
     if (!$u || $u['disabled_at'] || !$u['email_verified_at']) {
         unset($_SESSION['user_id']);
+        forget_device();
         return null;
     }
     return ['id' => (int)$u['id'], 'username' => $u['username'], 'email' => $u['email'], 'created_at' => iso_date($u['created_at']),
@@ -194,6 +199,74 @@ function login_user(int $id): void
     $_SESSION['user_id'] = $id;
     unset($_SESSION['pending_user_id']);
     db()->prepare('UPDATE users SET last_login_at=UTC_TIMESTAMP() WHERE id=?')->execute([$id]);
+    remember_device($id);
+}
+
+// "Remember me": the PHP session cookie dies when the browser or home-screen app closes (and the
+// server drops idle sessions), so a long-lived cookie signs the member back in (table user_remember).
+function set_remember_cookie(string $value, int $expires): void
+{
+    global $https;
+    setcookie(REMEMBER_COOKIE, $value, ['expires' => $expires, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => $https]);
+}
+
+function remember_device(int $id): void
+{
+    try {
+        forget_device();
+        $sel = bin2hex(random_bytes(12));
+        $val = bin2hex(random_bytes(32));
+        db()->prepare('INSERT INTO user_remember (selector, validator_hash, user_id, expires_at) VALUES (?, ?, ?, UTC_TIMESTAMP() + INTERVAL ? SECOND)')
+            ->execute([$sel, hash('sha256', $val), $id, REMEMBER_TTL]);
+        set_remember_cookie("$sel:$val", time() + REMEMBER_TTL);
+        if (random_int(1, 50) === 1) db()->exec('DELETE FROM user_remember WHERE expires_at < UTC_TIMESTAMP()');
+    } catch (PDOException) {
+        // Table not imported yet (sql/user_remember.sql): plain session login still works.
+    }
+}
+
+/** Signs the member in from the remember cookie when the session has none. */
+function restore_remembered(): void
+{
+    [$sel, $val] = explode(':', (string)($_COOKIE[REMEMBER_COOKIE] ?? ''), 2) + ['', ''];
+    if (!preg_match('/^[a-f0-9]{24}$/', $sel) || !preg_match('/^[a-f0-9]{64}$/', $val)) return;
+    try {
+        $st = db()->prepare('SELECT user_id, validator_hash FROM user_remember WHERE selector=? AND expires_at > UTC_TIMESTAMP()');
+        $st->execute([$sel]);
+        $row = $st->fetch();
+        if (!$row || !hash_equals($row['validator_hash'], hash('sha256', $val))) {
+            set_remember_cookie('', 1);
+            return;
+        }
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = (int)$row['user_id'];
+        // Using the app keeps it signed in: push the expiry out again.
+        db()->prepare('UPDATE user_remember SET expires_at=UTC_TIMESTAMP() + INTERVAL ? SECOND WHERE selector=?')->execute([REMEMBER_TTL, $sel]);
+        set_remember_cookie("$sel:$val", time() + REMEMBER_TTL);
+    } catch (PDOException) {
+    }
+}
+
+/** Drops this device's remember cookie (sign out). */
+function forget_device(): void
+{
+    $sel = explode(':', (string)($_COOKIE[REMEMBER_COOKIE] ?? ''))[0];
+    if ($sel === '') return;
+    try {
+        db()->prepare('DELETE FROM user_remember WHERE selector=?')->execute([$sel]);
+    } catch (PDOException) {
+    }
+    set_remember_cookie('', 1);
+    unset($_COOKIE[REMEMBER_COOKIE]);
+}
+
+/** Signs a member out on every device (password reset). */
+function forget_all_devices(int $id): void
+{
+    try {
+        db()->prepare('DELETE FROM user_remember WHERE user_id=?')->execute([$id]);
+    } catch (PDOException) {
+    }
 }
 
 // REMOTE_ADDR only: forwarded-for headers are set by the client and can't be trusted here.
@@ -988,6 +1061,7 @@ try {
                            email_verified_at=COALESCE(email_verified_at, UTC_TIMESTAMP()) WHERE id=?')
                 ->execute([password_hash($pass, PASSWORD_DEFAULT), $u['id']]);
             unset($_SESSION['reset_email']);
+            forget_all_devices((int)$u['id']);
             login_user((int)$u['id']);
             respond(['user' => current_user()]);
 
@@ -1072,6 +1146,7 @@ try {
 
         case 'user_logout':
             require_post();
+            forget_device();
             unset($_SESSION['user_id'], $_SESSION['pending_user_id']);
             session_regenerate_id(true);
             respond(['ok' => true]);
