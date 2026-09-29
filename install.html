@@ -15,9 +15,9 @@
 <body>
   <!-- Public page: linked from the Account page and from IPA downloads. -->
   <main class="wrap legal">
-    <a class="back" href="account.html">
+    <a class="back" id="backLink" href="account.html">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-      Account
+      <span>Account</span>
     </a>
     <h1 class="page-title">How to Install IPA</h1>
     <p class="muted">Play IPA games on your iPhone with LiveContainer.</p>
@@ -86,6 +86,14 @@
 
   <script src="assets/common.js?v=20260928e"></script>
   <script>
+    // Opened from a game page (?from=<slug>): the back link returns to that game instead of the Account page.
+    const from = new URLSearchParams(location.search).get('from') || '';
+    if (/^[\w-]+$/.test(from)) {
+      const back = document.getElementById('backLink');
+      back.href = 'game.html?slug=' + encodeURIComponent(from);
+      back.querySelector('span').textContent = 'Game';
+    }
+
     // Outside sites are shown as copy-only links: tap to copy the address instead of opening it.
     async function copyText(text) {
       try {

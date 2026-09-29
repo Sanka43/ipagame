@@ -95,7 +95,7 @@
         <div class="ver">
           <div class="ver-main">
             <div class="ver-head">
-              <strong>v${esc(v.version)}</strong>
+              <strong>v${esc(String(v.version).replace(/^v/i, ''))}</strong>
               ${i === 0 ? '<span class="badge">Latest</span>' : ''}
             </div>
             <div class="ver-meta">${esc([fmtDate(v.release_date), fmtSize(v.size_mb)].filter(Boolean).join(' · '))}</div>
@@ -114,7 +114,7 @@
             <h1>${esc(it.name)}</h1>
             <div class="dev">${esc(it.developer || catLabel(it.category))}</div>
             ${latest ? dlLink(latest, 'Download') : ''}
-            ${latest && !latest.download_url.includes('apps.apple.com') ? '<a class="how-install" href="install.html">How to install IPA</a>' : ''}
+            ${latest && !latest.download_url.includes('apps.apple.com') ? `<a class="how-install" href="install.html?from=${encodeURIComponent(it.slug)}">How to install IPA</a>` : ''}
           </div>
         </div>
 
