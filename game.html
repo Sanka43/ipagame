@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20260929b">
+  <link rel="stylesheet" href="assets/style.css?v=20260929e">
 </head>
 <body data-auth="required">
   <main class="wrap detail" id="app">
@@ -71,6 +71,7 @@
             <h1>${esc(it.name)}</h1>
             <div class="dev">${esc(it.developer || catLabel(it.category))}</div>
             ${latest ? dlLink(latest, 'Download') : ''}
+            ${latest && !latest.download_url.includes('apps.apple.com') ? '<a class="how-install" href="install.html">How to install IPA</a>' : ''}
           </div>
         </div>
 
@@ -85,11 +86,22 @@
 
         ${it.description || it.short_description ? `
           <h2 class="section-title">About</h2>
-          <p class="desc">${esc(it.description || it.short_description)}</p>` : ''}
+          <div class="desc-wrap clamp">
+            <p class="desc">${esc(it.description || it.short_description)}</p>
+            <button type="button" class="link-btn desc-more">more</button>
+          </div>` : ''}
 
         <h2 class="section-title">Versions <small>${it.versions?.length || 0}</small></h2>
         <div class="versions">${versions || '<p class="muted">No versions yet.</p>'}</div>
       `;
+
+      // About: show 5 lines with "more", like the App Store; no button when it already fits.
+      const wrap = el.querySelector('.desc-wrap');
+      if (wrap) {
+        const p = wrap.querySelector('.desc');
+        if (p.scrollHeight <= p.clientHeight + 1) wrap.classList.remove('clamp');
+        wrap.querySelector('.desc-more').addEventListener('click', () => wrap.classList.remove('clamp'));
+      }
     }
 
     if (!slug) {

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="How to install an IPA from Game Store on your iPhone with LiveContainer.">
+  <title>How to Install IPA · Game Store</title>
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
+  <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css?v=20260929e">
+</head>
+<body>
+  <!-- Public page: linked from the Account page and from IPA downloads. -->
+  <main class="wrap legal">
+    <a class="back" href="account.html">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Account
+    </a>
+    <h1 class="page-title">How to Install IPA</h1>
+    <p class="muted">Play IPA games on your iPhone with LiveContainer.</p>
+
+    <p>An iPhone only runs apps that are signed for it. <strong>LiveContainer</strong> is one app you sign once;
+      every game you add runs inside it. You can add as many games as you like, and only LiveContainer needs
+      refreshing every 7 days.</p>
+
+    <h2>What you need</h2>
+    <ul>
+      <li>An iPhone or iPad</li>
+      <li>A Windows PC or Mac and a USB cable (only for the first setup)</li>
+      <li>A free Apple ID</li>
+      <li>The game's IPA file from this store</li>
+    </ul>
+
+    <h2>Step 1 · Install SideStore</h2>
+    <ol>
+      <li>Follow the setup on <button type="button" class="copy-link" data-copy="https://sidestore.io">sidestore.io</button> to install
+        SideStore with your computer and cable, and sign in with your Apple ID.</li>
+      <li>On the iPhone open <strong>Settings → General → VPN &amp; Device Management</strong> and tap
+        <strong>Trust</strong> for your Apple ID.</li>
+      <li>On iOS 16 or later turn on <strong>Settings → Privacy &amp; Security → Developer Mode</strong> and restart
+        the iPhone.</li>
+    </ol>
+
+    <h2>Step 2 · Install LiveContainer</h2>
+    <ol>
+      <li>In Safari download the LiveContainer IPA from its official releases page:
+        <button type="button" class="copy-link" data-copy="https://github.com/LiveContainer/LiveContainer/releases">github.com/LiveContainer/LiveContainer/releases</button></li>
+      <li>Open <strong>SideStore → My Apps</strong>, tap <strong>+</strong> and pick the LiveContainer IPA from Files.</li>
+    </ol>
+
+    <h2>Step 3 · Add a game</h2>
+    <ol>
+      <li>Open the game in this store and tap <strong>Download</strong> to get its IPA. Safari saves it to the
+        <strong>Files</strong> app (Downloads).</li>
+      <li>Open <strong>LiveContainer</strong> and tap <strong>+</strong> at the top.</li>
+      <li>Pick the IPA you downloaded. LiveContainer imports it and adds it to the list.</li>
+      <li>Tap the game and tap <strong>Run</strong>. That's it, enjoy!</li>
+    </ol>
+    <p>To start a game straight from the Home Screen, open its settings in LiveContainer and use
+      <strong>Add to Home Screen</strong>.</p>
+
+    <h2>Keep it working</h2>
+    <p>With a free Apple ID, SideStore and LiveContainer stop opening after 7 days. Open
+      <strong>SideStore → My Apps</strong> and tap <strong>Refresh All</strong> before then. Your games and saves stay.</p>
+
+    <h2>Problems?</h2>
+    <ul>
+      <li><strong>“Untrusted Developer”</strong> — trust your Apple ID in <strong>Settings → General → VPN &amp; Device
+        Management</strong>.</li>
+      <li><strong>The game closes as soon as it opens</strong> — some games need JIT. Turn on JIT for the game in
+        LiveContainer's settings (it uses SideStore), then run it again.</li>
+      <li><strong>The import fails</strong> — download the IPA again; the file may not have finished downloading.</li>
+      <li><strong>LiveContainer won't open</strong> — it has passed 7 days; refresh it in SideStore.</li>
+    </ul>
+    <p>Still stuck? Use <strong>Chat with Support</strong> on the <a href="account.html">Account</a> page.</p>
+
+    <h2>Other ways</h2>
+    <p>Sideloadly (<button type="button" class="copy-link" data-copy="https://sideloadly.io">sideloadly.io</button>) installs an IPA straight from your
+      computer. It's simple, but with a free Apple ID you can only have 3 apps at a time and each one must be
+      re-installed every 7 days.</p>
+    <p class="muted">Tap a link to copy it, then paste it into Safari.</p>
+  </main>
+
+  <script src="assets/common.js?v=20260928e"></script>
+  <script>
+    // Outside sites are shown as copy-only links: tap to copy the address instead of opening it.
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const t = Object.assign(document.createElement('textarea'), { value: text });
+        document.body.append(t);
+        t.select();
+        document.execCommand('copy');
+        t.remove();
+      }
+    }
+    document.addEventListener('click', async e => {
+      const b = e.target.closest('[data-copy]');
+      if (!b) return;
+      await copyText(b.dataset.copy);
+      toast('Link copied');
+    });
+  </script>
+</body>
+</html>
