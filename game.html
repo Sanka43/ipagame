@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20260929e">
+  <link rel="stylesheet" href="assets/style.css?v=20260929f">
 </head>
 <body data-auth="required">
   <main class="wrap detail" id="app">
@@ -99,8 +99,15 @@
       const wrap = el.querySelector('.desc-wrap');
       if (wrap) {
         const p = wrap.querySelector('.desc');
+        const btn = wrap.querySelector('.desc-more');
         if (p.scrollHeight <= p.clientHeight + 1) wrap.classList.remove('clamp');
-        wrap.querySelector('.desc-more').addEventListener('click', () => wrap.classList.remove('clamp'));
+        else btn.addEventListener('click', () => {
+          const open = wrap.classList.toggle('clamp') === false;
+          wrap.classList.toggle('open', open);
+          btn.textContent = open ? 'less' : 'more';
+          // Folding a long text can leave the page scrolled past it: bring the About heading back.
+          if (!open && wrap.getBoundingClientRect().top < 0) wrap.previousElementSibling.scrollIntoView({ block: 'start' });
+        });
       }
     }
 
