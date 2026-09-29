@@ -8,7 +8,7 @@
   <link rel="icon" href="../assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="../assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css?v=20260929a">
+  <link rel="stylesheet" href="../assets/style.css?v=20260929b">
 </head>
 <body>
   <!-- Login -->
@@ -64,6 +64,25 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
           Add
         </button>
+      </div>
+      <div class="toolbar g-filters">
+        <select class="input u-filter" id="gFilter" aria-label="Filter by type or status">
+          <option value="">All</option>
+          <option value="game">Games</option>
+          <option value="app">Apps</option>
+          <option value="published">Published</option>
+          <option value="draft">Drafts</option>
+          <option value="nolink">No download link</option>
+        </select>
+        <select class="input u-filter" id="gSource" aria-label="Filter by download source">
+          <option value="">IPA &amp; App Store</option>
+          <option value="ipa">IPA</option>
+          <option value="store">App Store</option>
+        </select>
+        <select class="input u-filter" id="gCat" aria-label="Filter by category">
+          <option value="">All categories</option>
+        </select>
+        <span class="muted g-count" id="gCount"></span>
       </div>
 
       <div class="admin-list" id="list">
@@ -356,9 +375,24 @@
         items = r.items;
         const cats = new Set([...Object.values(r.categories || {}).flat(), ...items.map(i => i.category).filter(Boolean)]);
         $('#categoryList').innerHTML = [...cats].sort().map(c => `<option value="${esc(c)}">`).join('');
+        // Category filter: only categories that have games, keeping the current choice.
+        const pick = $('#gCat').value;
+        const used = [...new Set(items.map(i => i.category || ''))].sort((a, b) => catLabel(a).localeCompare(catLabel(b)));
+        $('#gCat').innerHTML = '<option value="">All categories</option>' +
+          used.map(c => `<option value="${esc(c || '-')}">${esc(c ? catLabel(c) : 'No category')}</option>`).join('');
+        $('#gCat').value = used.includes(pick === '-' ? '' : pick) ? pick : '';
         render();
       } catch (err) { handleError(err); }
     }
+
+    const GAME_FILTERS = {
+      '': () => true,
+      game: i => i.type === 'game',
+      app: i => i.type === 'app',
+      published: i => i.status !== 'draft',
+      draft: i => i.status === 'draft',
+      nolink: i => !i.download_url,
+    };
 
     function render() {
       const count = f => items.filter(f).length;
@@ -370,10 +404,15 @@
       ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
 
       const q = $('#q').value.trim().toLowerCase();
-      const list = items.filter(i => !q || [i.name, i.developer, i.category].join(' ').toLowerCase().includes(q));
+      const kind = GAME_FILTERS[$('#gFilter').value];
+      const cat = $('#gCat').value;
+      const source = $('#gSource').value;
+      const list = items.filter(i => kind(i) && (!source || (source === 'ipa' ? i.ipa : !i.ipa && !!i.download_url)) && (!cat || (i.category || '-') === cat) &&
+        (!q || [i.name, i.developer, i.category].join(' ').toLowerCase().includes(q)));
+      $('#gCount').textContent = list.length === items.length ? '' : `${list.length} of ${items.length}`;
       $('#list').innerHTML = list.length ? list.map(it => {
         const n = it.versions_count || 0;
-        const meta = [it.type === 'app' ? 'App' : 'Game', catLabel(it.category), it.latest_version && 'v' + String(it.latest_version).replace(/^v/i, ''), `${n} version${n === 1 ? '' : 's'}`]
+        const meta = [it.type === 'app' ? 'App' : 'Game', it.ipa ? 'IPA' : it.download_url && 'App Store', catLabel(it.category), it.latest_version && 'v' + String(it.latest_version).replace(/^v/i, ''), `${n} version${n === 1 ? '' : 's'}`]
           .filter(Boolean).join(' · ');
         const dl = it.download_url || '';
         return `<div class="row">
@@ -392,6 +431,9 @@
     }
 
     $('#q').addEventListener('input', render);
+    $('#gFilter').addEventListener('change', render);
+    $('#gCat').addEventListener('change', render);
+    $('#gSource').addEventListener('change', render);
 
     $('#list').addEventListener('click', async e => {
       const edit = e.target.closest('[data-edit]');
