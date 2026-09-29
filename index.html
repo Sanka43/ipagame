@@ -40,15 +40,15 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20260928e"></script>
+  <script src="assets/common.js?v=20260929b"></script>
   <script>
     const $ = s => document.querySelector(s);
     const PER_PAGE = 24;
     const SHELF_SIZE = 9;                        // 3 columns of 3 cards
-    // type: '' | 'game' | 'app'; cat: '' | category slug — they combine (e.g. Games → Puzzle).
+    // type: '' | 'game' | 'app' | 'ipa' (names ending in "IPA"); cat: '' | category slug — they combine (e.g. Games → Puzzle).
     // search: the Search tab is open (stays open while the query is cleared).
     const state = { type: '', cat: '', q: '', search: false, page: 1, facets: null };
-    const TYPE_LABELS = { game: 'Games', app: 'Apps' };
+    const TYPE_LABELS = { game: 'Games', app: 'Apps', ipa: 'IPA Games' };
 
     function readUrl() {
       const p = new URLSearchParams(location.search);
@@ -389,7 +389,7 @@
         if (home) {
           $('#shelves').innerHTML = r.shelves?.length
             ? r.shelves.map(shelfHTML).join('')
-            : `<p class="empty">No ${state.type === 'app' ? 'apps' : 'games'} yet.</p>`;
+            : `<p class="empty">No ${state.type === 'app' ? 'apps' : state.type === 'ipa' ? 'IPA games' : 'games'} yet.</p>`;
           if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
@@ -462,7 +462,7 @@
       e.preventDefault();
       const tab = a.dataset.tab;
       const again = tab === activeTab() && !state.cat && state.page === 1;
-      Object.assign(state, { cat: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' ? tab : '' });
+      Object.assign(state, { cat: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' || tab === 'ipa' ? tab : '' });
       if (tab !== 'search' || !again) { state.q = ''; $('#q').value = ''; }
       window.scrollTo({ top: 0 });
       if (tab === 'search') $('#q').focus();

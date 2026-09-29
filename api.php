@@ -792,7 +792,10 @@ function list_row(array $i): array
 
 function matches_filters(array $i, string $type, string $cat, string $q): bool
 {
-    if ($type !== '' && ($i['type'] ?? '') !== $type) return false;
+    // "ipa" is the IPA tab: games whose name ends in "IPA" (e.g. "Minecraft IPA").
+    if ($type === 'ipa') {
+        if (!preg_match('/\bIPA$/i', trim($i['name'] ?? ''))) return false;
+    } elseif ($type !== '' && ($i['type'] ?? '') !== $type) return false;
     if ($cat !== '' && ($i['category'] ?? '') !== $cat) return false;
     if ($q === '') return true;
     $hay = implode(' ', [$i['name'] ?? '', $i['developer'] ?? '', $i['category'] ?? '', $i['short_description'] ?? '', ...(array)($i['tags'] ?? [])]);
@@ -898,7 +901,7 @@ try {
                 if (empty($i['category'])) continue;
                 $facets['categories'][$i['category']] = true;
                 // Counts are scoped to the selected type so "Games" only shows game categories.
-                if ($type === '' || ($i['type'] ?? 'game') === $type) $counts[$i['category']] = ($counts[$i['category']] ?? 0) + 1;
+                if (matches_filters($i, $type, '', '')) $counts[$i['category']] = ($counts[$i['category']] ?? 0) + 1;
             }
             $facets = ['types' => array_keys($facets['types']), 'categories' => array_keys($facets['categories'])];
             sort($facets['categories']);
