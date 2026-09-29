@@ -1046,9 +1046,16 @@ try {
             require_post();
             $me = current_user() ?? throw new ApiError('Login required', 401);
             throttle_login();
-            $st = db()->prepare('SELECT password_hash FROM users WHERE id=?');
+            $st = db()->prepare('SELECT password_hash, google_sub FROM users WHERE id=?');
             $st->execute([$me['id']]);
-            if (!password_verify((string)(body()['password'] ?? ''), (string)$st->fetchColumn())) {
+            $row = $st->fetch();
+            if (isset(body()['credential'])) {
+                // Google accounts may have no known password: a fresh Google sign-in confirms instead.
+                $c = google_claims((string)body()['credential']);
+                if (empty($row['google_sub']) || !hash_equals((string)$row['google_sub'], (string)$c['sub'])) {
+                    throw new ApiError('That Google account is not linked to this account', 403);
+                }
+            } elseif (!password_verify((string)(body()['password'] ?? ''), (string)$row['password_hash'])) {
                 rate_hit('login:' . client_ip());
                 throw new ApiError('Wrong password', 401);
             }

@@ -10,7 +10,7 @@
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20260928f">
+  <link rel="stylesheet" href="assets/style.css?v=20260929a">
 </head>
 <body class="auth-page">
   <div class="arcade-wall" aria-hidden="true"><div class="wall-rows" id="wall"></div></div>
@@ -247,6 +247,11 @@
           <p class="auth-error" id="deleteError" role="alert"></p>
           <button class="btn-play danger" type="submit"><span>Delete My Account</span></button>
         </form>
+        <!-- Google accounts may have no password: signing in with Google again confirms instead -->
+        <div class="google-wrap" hidden>
+          <div class="or-line"><span>or confirm with Google</span></div>
+          <div class="gbtn"></div>
+        </div>
         <p class="auth-switch"><button type="button" class="link-btn" data-mode="profile">Cancel</button></p>
       </section>
     </div>
@@ -319,6 +324,7 @@
       $('#pEmail').textContent = user.email;
       $('#pSince').textContent = fmtDate(user.created_at.slice(0, 10));
       $('#dName').textContent = user.username;
+      $('#deleteView').classList.toggle('no-google', !user.google);
       setView('profile');
       unmountChat ||= mountChat($('#supportBtn'));
     }
@@ -603,6 +609,15 @@
     }
 
     async function onGoogleCredential({ credential }) {
+      if (!$('#deleteView').hidden) {
+        $('#deleteError').textContent = '';
+        try {
+          await deleteAccount({ credential });
+        } catch (err) {
+          $('#deleteError').textContent = err.message;
+        }
+        return;
+      }
       const errEl = $('#registerView').hidden ? $('#loginError') : $('#registerError');
       errEl.textContent = '';
       try {
@@ -616,18 +631,23 @@
     $('#deleteForm').addEventListener('submit', e => submit(e, $('#deleteError'), async () => {
       const password = $('#dPass').value;
       if (!password) throw new Error('Enter your password to confirm.');
+      await deleteAccount({ password });
+    }));
+
+    // Confirmed by password, or by a fresh Google sign-in (credential) for Google-linked accounts.
+    async function deleteAccount(body) {
       try {
-        await api('delete_account', { body: { password } });
+        await api('delete_account', { body });
       } catch (err) {
-        if (err.status === 401 && err.message !== 'Wrong password') { setView('login'); return; }
+        if (err.status === 401 && err.message !== 'Wrong password' && !body.credential) { setView('login'); return; }
         throw err;
       }
       forgetMe();
-      e.target.reset();
+      $('#deleteForm').reset();
       $('#loginForm').reset();
       setView('login');
       toast('Your account was deleted');
-    }));
+    }
 
     $('#logoutBtn').addEventListener('click', async e => {
       e.target.disabled = true;

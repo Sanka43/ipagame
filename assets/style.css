@@ -753,6 +753,7 @@ main.wrap { position: relative; display: flow-root; }   /* flow-root: title marg
 
 /* Continue with Google */
 .google-wrap { margin-top: 18px; }
+.no-google .google-wrap { display: none; }
 .or-line { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: rgba(255, 255, 255, .1); }
 /* The Google iframe is a light document: a dark parent scheme would paint it an opaque white box. */
