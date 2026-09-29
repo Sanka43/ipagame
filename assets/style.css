@@ -399,6 +399,8 @@ dialog.sheet form { display: flex; flex-direction: column; height: 100%; }
 .shelf-track > * { scroll-snap-align: start; }
 @media (min-width: 640px) { .shelf-track { grid-auto-columns: calc(50% - 10px); } }
 @media (min-width: 1000px) { .shelf-track { grid-auto-columns: calc(33.333% - 14px); } }
+/* Three or fewer items fill one column: let it take the full width instead of leaving a gap for a next column. */
+.shelf-track.single { grid-auto-columns: 100%; }
 .stat .v a { color: var(--accent); }
 
 /* ---------- Today (Home tab) ---------- */
