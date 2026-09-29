@@ -208,6 +208,40 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .stat .v { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .desc { white-space: pre-line; overflow-wrap: anywhere; }
+/* Screenshots: a swipeable row that runs to the screen edges, and a full-screen viewer. */
+.shots {
+  display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  margin: 0 -16px; padding: 4px 16px 8px; scroll-padding: 0 16px;
+}
+.shots::-webkit-scrollbar { display: none; }
+.shot {
+  flex: none; padding: 0; border: 1px solid var(--border); border-radius: 18px; overflow: hidden;
+  background: var(--surface); cursor: zoom-in; scroll-snap-align: start;
+}
+.shot img { display: block; height: 420px; width: auto; min-width: 120px; max-width: 86vw; object-fit: cover; }
+.shots.ipad .shot img { height: 300px; }
+@media (max-width: 640px) { .shot img { height: 360px; } .shots.ipad .shot img { height: 220px; } }
+.shot-tabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+.shot-tabs button {
+  border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+  padding: 4px 12px; border-radius: 999px; cursor: pointer;
+}
+.shot-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; }
+.shot-view {
+  border: 0; padding: 0; margin: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none;
+  background: rgba(0, 0, 0, .94); color: #fff;
+}
+.shot-view::backdrop { background: rgba(0, 0, 0, .94); }
+.shot-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.shot-track::-webkit-scrollbar { display: none; }
+.shot-track img {
+  flex: none; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: center;
+  padding: 60px 16px 28px; box-sizing: border-box;
+}
+.shot-close {
+  position: fixed; top: 14px; right: 14px; z-index: 1; width: 36px; height: 36px; border-radius: 50%;
+  border: 0; background: rgba(255, 255, 255, .16); color: #fff; font-size: 24px; line-height: 1; cursor: pointer;
+}
 .desc-wrap { position: relative; }
 .desc-wrap.clamp .desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; line-clamp: 5; overflow: hidden; }
 .desc-wrap .desc-more { display: none; position: absolute; right: 0; bottom: 0; padding-left: 36px; color: var(--accent); font-weight: 600;
@@ -216,11 +250,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .desc-wrap.open .desc-more { display: block; position: static; padding: 0; margin-top: 6px; background: none; }
 .how-install { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--accent); }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-.versions { display: grid; gap: 10px; }
-.ver-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.versions { display: grid; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.ver {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px;
+  padding: 14px 0; border-top: 1px solid var(--border);
+}
+.ver:first-child { border-top: 0; }
+.ver-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ver-head strong { font-size: 16px; }
-.ver-meta { color: var(--muted); font-size: 13px; }
-.ver-notes { margin: 8px 0 12px; white-space: pre-line; font-size: 14px; overflow-wrap: anywhere; }
+.ver-meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.ver-notes-wrap { grid-column: 1 / -1; margin-top: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.ver-notes { margin: 0; white-space: pre-line; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.ver-notes-wrap.clamp .ver-notes { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+/* As tall as the two folded lines, so the arrow sits beside them and stays put when the notes open. */
+.ver-more { display: grid; place-items: center; width: 28px; height: 42px; }
+.ver-more svg { transition: transform .2s; }
+.ver-notes-wrap.open .ver-more svg { transform: rotate(180deg); }
 
 /* ---------- Forms ---------- */
 .field { display: grid; gap: 6px; margin-bottom: 14px; min-width: 0; }
