@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20260929m">
+  <link rel="stylesheet" href="assets/style.css?v=20260929r">
 </head>
 <body data-auth="required">
   <main class="wrap detail" id="app">
@@ -50,14 +50,21 @@
     const SHOT_SIZE = /\/\d+x\d+[a-z]*\.(jpe?g|png|webp)$/i;
     const shotSrc = (u, w) => /mzstatic\.com\//.test(u) ? u.replace(SHOT_SIZE, `/${w}x0w.$1`) : asset(u);
 
+    const allShots = it => [...(it.screenshots || []), ...(it.ipad_screenshots || [])];
+    // Plain white chevron; a soft shadow (CSS) keeps it readable on bright screenshots.
+    const chevron = d => `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+
+    // iPhone then iPad screenshots in one row, with left / right arrows to move through them.
     function shotsHTML(it) {
-      const sets = [['iPhone', it.screenshots || []], ['iPad', it.ipad_screenshots || []]].filter(([, list]) => list.length);
-      if (!sets.length) return '';
-      const tabs = sets.length > 1 ? `<span class="shot-tabs" role="tablist">${sets.map(([name], i) =>
-        `<button type="button" role="tab" aria-selected="${i === 0}" data-set="${i}">${name}</button>`).join('')}</span>` : '';
-      return `<h2 class="section-title">Preview ${tabs}</h2>` + sets.map(([name, list], i) =>
-        `<div class="shots${name === 'iPad' ? ' ipad' : ''}" data-set="${i}"${i ? ' hidden' : ''}>${list.map((u, j) =>
-          `<button type="button" class="shot" data-i="${j}" aria-label="Open ${name} screenshot ${j + 1}"><img src="${esc(shotSrc(u, 600))}" alt="" loading="lazy"></button>`).join('')}</div>`).join('');
+      const list = allShots(it);
+      if (!list.length) return '';
+      return `<h2 class="section-title">Preview</h2>
+        <div class="shots-box">
+          <button type="button" class="shots-nav prev" data-dir="-1" aria-label="Previous screenshots" hidden>${chevron('m15 18-6-6 6-6')}</button>
+          <div class="shots">${list.map((u, j) =>
+            `<button type="button" class="shot" data-i="${j}" aria-label="Open screenshot ${j + 1}"><img src="${esc(shotSrc(u, 600))}" alt="" loading="lazy"></button>`).join('')}</div>
+          <button type="button" class="shots-nav next" data-dir="1" aria-label="Next screenshots" hidden>${chevron('m9 18 6-6-6-6')}</button>
+        </div>`;
     }
 
     // Full-screen viewer: swipe between the screenshots of one set.
@@ -133,15 +140,25 @@
         <div class="versions">${versions || '<p class="muted">No versions yet.</p>'}</div>
       `;
 
-      const shotSets = [it.screenshots || [], it.ipad_screenshots || []].filter(list => list.length);
-      el.querySelectorAll('.shot-tabs [data-set]').forEach(tab => tab.addEventListener('click', () => {
-        el.querySelectorAll('.shot-tabs [data-set]').forEach(t => t.setAttribute('aria-selected', t === tab));
-        el.querySelectorAll('.shots').forEach(row => row.hidden = row.dataset.set !== tab.dataset.set);
-      }));
-      el.querySelectorAll('.shots').forEach(row => row.addEventListener('click', e => {
-        const shot = e.target.closest('.shot');
-        if (shot) openShots(shotSets[row.dataset.set], +shot.dataset.i);
-      }));
+      const row = el.querySelector('.shots');
+      if (row) {
+        const [prev, next] = el.querySelectorAll('.shots-nav');
+        // Arrows only where there is more to see in that direction.
+        const syncNav = () => {
+          prev.hidden = row.scrollLeft <= 4;
+          next.hidden = row.scrollLeft + row.clientWidth >= row.scrollWidth - 4;
+        };
+        row.addEventListener('scroll', syncNav, { passive: true });
+        row.querySelectorAll('img').forEach(img => img.addEventListener('load', syncNav));
+        addEventListener('resize', syncNav);
+        syncNav();
+        [prev, next].forEach(b => b.addEventListener('click', () =>
+          row.scrollBy({ left: +b.dataset.dir * row.clientWidth * 0.8, behavior: 'smooth' })));
+        row.addEventListener('click', e => {
+          const shot = e.target.closest('.shot');
+          if (shot) openShots(allShots(it), +shot.dataset.i);
+        });
+      }
 
       // Version notes: 2 lines with an arrow that opens and closes them; no button when they fit.
       el.querySelectorAll('.ver-notes-wrap').forEach(wrap => {
