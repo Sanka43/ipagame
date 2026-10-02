@@ -36,8 +36,8 @@ return [
     'site_url' => '',
     // Social buttons in the home page header. Full URLs; leave one empty to hide that button.
     'social' => [
-        'x' => '',          // https://x.com/yourname
-        'telegram' => '',   // https://t.me/yourchannel
-        'youtube' => '',    // https://youtube.com/@yourchannel
+        'x' => '#',          // https://x.com/yourname
+        'telegram' => '#',   // https://t.me/yourchannel
+        'youtube' => '#',    // https://youtube.com/@yourchannel
     ],
 ];
