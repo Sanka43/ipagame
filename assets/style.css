@@ -357,6 +357,9 @@ dialog.sheet form { display: flex; flex-direction: column; height: 100%; }
 .toast.err { background: var(--danger); color: #fff; }
 
 .foot { color: var(--muted); font-size: 13px; padding: 32px 16px 40px; text-align: center; }
+.social { display: flex; justify-content: center; gap: 12px; margin-bottom: 14px; }
+.social a { width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--text); display: grid; place-items: center; transition: transform .15s, color .15s; }
+.social a:hover { color: var(--accent); transform: translateY(-2px); }
 
 
 /* ---------- App cards (shelves + lists) ---------- */
