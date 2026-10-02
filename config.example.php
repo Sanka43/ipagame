@@ -34,4 +34,10 @@ return [
     // Public URL of this site, e.g. 'https://app.ipagame.store'. Set it on the server: emails only
     // link to this address (never to the request's Host header). Empty = auto-detect for icons only.
     'site_url' => '',
+    // Social buttons in the home page header. Full URLs; leave one empty to hide that button.
+    'social' => [
+        'x' => '',          // https://x.com/yourname
+        'telegram' => '',   // https://t.me/yourchannel
+        'youtube' => '',    // https://youtube.com/@yourchannel
+    ],
 ];

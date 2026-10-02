@@ -26,6 +26,11 @@ define('SITE_URL', rtrim((string)($config['site_url'] ?? ''), '/'));
 // Store name used in emails; also the default sender name.
 const BRAND = 'IPA Game Store';
 define('MAIL', (array)($config['mail'] ?? []) + ['from' => 'info@ipagame.store', 'from_name' => BRAND]);
+// Social buttons shown on the home page: only http(s) URLs for the known platforms.
+define('SOCIAL', array_filter(array_map(
+    fn($u) => preg_match('#^https?://#i', trim((string)$u)) ? trim((string)$u) : '',
+    array_intersect_key((array)($config['social'] ?? []), array_flip(['x', 'telegram', 'youtube']))
+)));
 // OAuth client ID for "Continue with Google" (Google Cloud Console → Credentials). Empty = button hidden.
 define('GOOGLE_CLIENT_ID', trim((string)($config['google_client_id'] ?? '')));
 require __DIR__ . '/mailer.php';
@@ -939,6 +944,7 @@ try {
                 'facets' => $facets,
                 'featured' => $featured,
                 'shelves' => $shelves,
+                'social' => SOCIAL,
             ]);
 
         case 'get':
