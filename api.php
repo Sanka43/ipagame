@@ -12,6 +12,8 @@ date_default_timezone_set('UTC');
 const ICON_DIR   = __DIR__ . '/uploads/icons';
 const SHOT_DIR   = __DIR__ . '/uploads/screenshots';
 const AVATAR_DIR = __DIR__ . '/uploads/avatars';
+const IPA_DIR    = __DIR__ . '/uploads/ipa';
+const IPA_MAX_MB = 4096;
 // Admin login and database live in config.php (git-ignored). Copy config.example.php to create it.
 $config = is_file(__DIR__ . '/config.php') ? require __DIR__ . '/config.php' : [];
 define('ADMIN_USER', (string)($config['admin_user'] ?? ''));
@@ -463,8 +465,26 @@ function db(): PDO
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
         ]);
+        publish_due($pdo);
     }
     return $pdo;
+}
+
+/** Scheduled releases (draft + publish_at) go live once their time has passed. Returns how many. */
+function publish_due(?PDO $pdo = null): int
+{
+    try {
+        return (int)($pdo ?? db())->exec("UPDATE games SET status='published', publish_at=NULL, updated_at=UTC_TIMESTAMP()
+                                          WHERE status='draft' AND publish_at IS NOT NULL AND publish_at <= UTC_TIMESTAMP()");
+    } catch (Throwable $e) {
+        return 0;   // publish_at column not added yet (sql/games_schedule.sql)
+    }
+}
+
+function has_publish_at(): bool
+{
+    static $has;
+    return $has ??= (bool)db()->query("SHOW COLUMNS FROM games LIKE 'publish_at'")->fetch();
 }
 
 function site_url(): string
@@ -524,6 +544,7 @@ function row_to_item(array $r, array $versions = [], array $shots = []): array
         'seo' => ['title' => $r['seo_title'] ?? '', 'meta_description' => $r['seo_description'] ?? ''],
         'license_type' => $r['license_type'] ?? 'app-store-link',
         'status' => $r['status'] ?? 'published',
+        'publish_at' => iso_date($r['publish_at'] ?? null),
         'created_at' => iso_date($r['created_at'] ?? null),
         'updated_at' => iso_date($r['updated_at'] ?? null),
     ];
@@ -539,7 +560,8 @@ function group_by_game(string $sql): array
 /** Admin list rows: just what the list shows. The editor loads one full item with 'get'. */
 function fetch_admin_rows(): array
 {
-    $rows = db()->query('SELECT g.id, g.slug, g.type, g.name, g.developer, g.category, g.icon, g.latest_version, g.status,
+    $pub = has_publish_at() ? ' g.publish_at,' : '';
+    $rows = db()->query('SELECT g.id, g.slug, g.type, g.name, g.developer, g.category, g.icon, g.latest_version, g.status,' . $pub . '
                                 (SELECT COUNT(*) FROM game_versions v WHERE v.game_id = g.id) AS versions_count,
                                 (SELECT v.download_url FROM game_versions v WHERE v.game_id = g.id ORDER BY v.id LIMIT 1) AS download_url,
                                 EXISTS(SELECT 1 FROM game_versions v WHERE v.game_id = g.id
@@ -615,6 +637,7 @@ function save_item(array $it, ?int $id): int
         'status' => $it['status'],
         'updated_at' => sql_date($it['updated_at']),
     ];
+    if (has_publish_at()) $cols['publish_at'] = $it['publish_at'] !== '' ? sql_date($it['publish_at']) : null;
     if ($id === null) {
         $cols += ['slug' => $it['slug'], 'created_at' => sql_date($it['created_at'])];
         $sql = 'INSERT INTO games (' . implode(',', array_keys($cols)) . ') VALUES (' . rtrim(str_repeat('?,', count($cols)), ',') . ')';
@@ -668,6 +691,31 @@ function store_upload_image(?array $f, string $dir, int $maxMb, string $label): 
     $name = bin2hex(random_bytes(8)) . '.' . $ext;
     if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) throw new ApiError("Could not save $label", 500);
     return site_url() . '/uploads/' . basename($dir) . '/' . $name;
+}
+
+/** Appends slice $index of $total to a partial file; after the last one moves it to uploads/ipa/ and returns its URL + size. */
+function store_ipa_chunk(?array $f, string $uid, int $index, int $total, string $name): array
+{
+    if (!$f || $f['error'] !== UPLOAD_ERR_OK) throw new ApiError('Upload failed', 400);
+    if (!preg_match('/^[a-f0-9]{16}$/', $uid) || $total < 1 || $index < 0 || $index >= $total) throw new ApiError('Bad upload', 400);
+    if (!preg_match('/\.ipa$/i', $name)) throw new ApiError('Choose an .ipa file', 422);
+    if (!is_dir(IPA_DIR)) mkdir(IPA_DIR, 0775, true);
+    $part = IPA_DIR . "/$uid.part";
+    if ($index === 0) @unlink($part);
+    elseif (!is_file($part)) throw new ApiError('Upload expired, start again', 409);
+    if (file_put_contents($part, file_get_contents($f['tmp_name']), FILE_APPEND | LOCK_EX) === false) throw new ApiError('Could not save the file', 500);
+    clearstatcache(true, $part);
+    $size = filesize($part);
+    if ($size > IPA_MAX_MB * 1024 * 1024) { @unlink($part); throw new ApiError('IPA must be under ' . IPA_MAX_MB . ' MB', 422); }
+    if ($index < $total - 1) return ['done' => false];
+    $handle = fopen($part, 'rb');
+    $magic = $handle ? fread($handle, 4) : '';
+    if ($handle) fclose($handle);
+    if ($magic !== "PK\x03\x04") { @unlink($part); throw new ApiError('That is not a valid IPA (zip) file', 422); }
+    $base = trim((string)preg_replace('~[^A-Za-z0-9._-]+~', '-', pathinfo($name, PATHINFO_FILENAME)), '-.') ?: 'app';
+    $final = mb_substr($base, 0, 60) . '-' . substr($uid, 0, 8) . '.ipa';
+    if (!rename($part, IPA_DIR . '/' . $final)) throw new ApiError('Could not save the file', 500);
+    return ['done' => true, 'path' => site_url() . '/uploads/ipa/' . $final, 'size_mb' => round($size / 1048576, 1)];
 }
 
 function str_in(array $in, string $key, int $max): string
@@ -774,7 +822,18 @@ function clean_item(array $in, ?array $existing): array
         'title' => $name . ' ' . (preg_match('/^v/i', $ver) ? $ver : "v$ver"),
         'meta_description' => $item['short_description'] !== '' ? $item['short_description'] : $name,
     ];
-    $item['status'] = in_array($in['status'] ?? '', STATUSES, true) ? $in['status'] : 'published';
+    $status = (string)($in['status'] ?? '');
+    $item['publish_at'] = '';
+    if ($status === 'scheduled') {
+        // A scheduled release is a hidden draft that publish_due() flips at publish_at (UTC, ISO 8601).
+        $at = strtotime((string)($in['publish_at'] ?? ''));
+        if (!$at) throw new ApiError('Pick the date and time to publish', 422);
+        if ($at <= time()) throw new ApiError('The publish time must be in the future', 422);
+        if (!has_publish_at()) throw new ApiError('Scheduling needs sql/games_schedule.sql imported first', 500);
+        $item['publish_at'] = gmdate('Y-m-d\TH:i:s\Z', $at);
+        $status = 'draft';
+    }
+    $item['status'] = in_array($status, STATUSES, true) ? $status : 'published';
 
     $now = gmdate('Y-m-d\TH:i:s\Z');
     $item['created_at'] = ($item['created_at'] ?? '') ?: $now;
@@ -883,6 +942,8 @@ function chat_post(int $userId, bool $admin, string $text): array
     $st->execute([$id]);
     return chat_row($st->fetch());
 }
+
+if (PHP_SAPI === 'cli') return;   // publish_scheduled.php only needs the functions above
 
 try {
     switch ($_GET['action'] ?? '') {
@@ -1373,6 +1434,13 @@ try {
             require_post();
             require_admin();
             respond(['path' => store_upload_image($_FILES['shot'] ?? null, SHOT_DIR, 5, 'Screenshot')]);
+
+        case 'upload_ipa':
+            // One slice of a big IPA per request (stays under post_max_size); the last slice returns the link.
+            require_post();
+            require_admin();
+            respond(store_ipa_chunk($_FILES['chunk'] ?? null, (string)($_POST['upload_id'] ?? ''), (int)($_POST['index'] ?? -1),
+                                    (int)($_POST['total'] ?? 0), (string)($_POST['name'] ?? '')));
 
         default:
             throw new ApiError('Unknown action', 400);

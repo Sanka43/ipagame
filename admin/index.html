@@ -86,6 +86,7 @@
           <option value="app">Apps</option>
           <option value="published">Published</option>
           <option value="draft">Drafts</option>
+          <option value="scheduled">Scheduled</option>
           <option value="nolink">No download link</option>
         </select>
         <select class="input u-filter" id="gSource" aria-label="Filter by download source">
@@ -246,10 +247,15 @@
             <label class="label" for="f-status">Status</label>
             <select class="input" id="f-status" name="status">
               <option value="published">Published</option>
+              <option value="scheduled">Scheduled (goes live later)</option>
               <option value="draft">Draft (hidden)</option>
               <option value="review">Review (hidden)</option>
               <option value="removed">Removed (hidden)</option>
             </select>
+          </div>
+          <div class="field" id="publishAtField" style="display:none">
+            <label class="label" for="f-publish-at">Publish at (your local time)</label>
+            <input class="input" id="f-publish-at" name="publish_at" type="datetime-local">
           </div>
         </div>
         <div class="checks">
@@ -418,7 +424,8 @@
       game: i => i.type === 'game',
       app: i => i.type === 'app',
       published: i => i.status !== 'draft',
-      draft: i => i.status === 'draft',
+      draft: i => i.status === 'draft' && !i.publish_at,
+      scheduled: isScheduled,
       nolink: i => !i.download_url,
     };
 
@@ -428,7 +435,8 @@
         ['Total', items.length],
         ['Games', count(i => i.type === 'game')],
         ['Apps', count(i => i.type === 'app')],
-        ['Drafts', count(i => i.status === 'draft')],
+        ['Drafts', count(i => i.status === 'draft' && !i.publish_at)],
+        ['Scheduled', count(isScheduled)],
       ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
 
       const q = $('#q').value.trim().toLowerCase();
@@ -446,7 +454,7 @@
         return `<div class="row">
           ${iconHTML(it, 'sm')}
           <div class="row-info">
-            <div class="row-name">${esc(it.name)} ${it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''}</div>
+            <div class="row-name">${esc(it.name)} ${isScheduled(it) ? `<span class="badge draft">Scheduled · ${esc(new Date(it.publish_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</span>` : it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''}</div>
             <div class="row-sub">${esc(meta)}</div>
             ${dl ? `<a class="row-link" href="${esc(asset(dl))}" target="_blank" rel="noopener" title="${esc(dl)}">${esc(dl.replace(/^https?:\/\//i, ''))}</a>` : '<div class="row-sub">No download link</div>'}
           </div>
@@ -505,13 +513,58 @@
             <input class="input" type="number" min="0" step="0.1" data-k="size_mb" value="${esc(v.size_mb)}"></div>
         </div>
         <div class="field"><label class="label">Download URL *</label>
-          <input class="input" data-k="download_url" value="${esc(v.download_url)}" placeholder="https://…/game.ipa"></div>
+          <div class="shot-add">
+            <input class="input" data-k="download_url" value="${esc(v.download_url)}" placeholder="https://…/game.ipa or upload an IPA">
+            <label class="btn sm ghost" style="cursor:pointer" data-ipa-label>Upload IPA
+              <input type="file" accept=".ipa" hidden data-ipa></label>
+          </div></div>
         <div class="field" style="margin:0"><label class="label">What's new</label>
           <textarea class="input" rows="2" data-k="changelog">${esc(v.changelog)}</textarea></div>`;
       box.querySelector('[data-remove]').addEventListener('click', () => box.remove());
+      box.querySelector('[data-ipa]').addEventListener('change', e => uploadIpa(box, e.target));
       $('#versions').append(box);
       return box;
     }
+
+    // Sends an IPA in 8 MB slices (a single POST would hit the host's upload limit) and fills the version's link and size.
+    const IPA_SLICE = 8 * 1024 * 1024;
+    async function uploadIpa(box, input) {
+      const file = input.files[0];
+      input.value = '';
+      if (!file) return;
+      if (!/\.ipa$/i.test(file.name)) { toast('Choose an .ipa file', true); return; }
+      const label = box.querySelector('[data-ipa-label]');
+      const text = label.firstChild;
+      const uid = [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('');
+      const total = Math.max(1, Math.ceil(file.size / IPA_SLICE));
+      label.style.pointerEvents = 'none';
+      try {
+        for (let i = 0; i < total; i++) {
+          text.textContent = `Uploading ${Math.round(i / total * 100)}% `;
+          const fd = new FormData();
+          fd.append('chunk', file.slice(i * IPA_SLICE, (i + 1) * IPA_SLICE), 'chunk');
+          fd.append('upload_id', uid);
+          fd.append('index', i);
+          fd.append('total', total);
+          fd.append('name', file.name);
+          const r = await api('upload_ipa', { form: fd });
+          if (r.done) {
+            box.querySelector('[data-k="download_url"]').value = r.path;
+            box.querySelector('[data-k="size_mb"]').value = r.size_mb;
+            toast('IPA uploaded');
+          }
+        }
+      } catch (err) { handleError(err); }
+      finally { text.textContent = 'Upload IPA '; label.style.pointerEvents = ''; }
+    }
+
+    // Local date-time input value <-> the ISO time the server stores.
+    const toLocalInput = iso => {
+      const d = new Date(iso);
+      return isNaN(d) ? '' : new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    };
+    const isScheduled = it => it?.status === 'draft' && !!it.publish_at;
+    const syncPublishAt = () => { $('#publishAtField').style.display = form.status.value === 'scheduled' ? '' : 'none'; };
 
     // Screenshot URLs being edited, per device, in display order.
     const shots = { screenshots: [], ipad_screenshots: [] };
@@ -589,7 +642,9 @@
       f.icon.value = it?.icon ?? '';
       f.short_description.value = it?.short_description ?? '';
       f.description.value = it?.description ?? '';
-      f.status.value = it?.status ?? 'published';
+      f.status.value = isScheduled(it) ? 'scheduled' : it?.status ?? 'published';
+      f.publish_at.value = isScheduled(it) ? toLocalInput(it.publish_at) : '';
+      syncPublishAt();
       f.popular.checked = !!it?.featured?.popular;
       f.editors_choice.checked = !!it?.featured?.editors_choice;
       f.rating_value.value = it?.rating?.value || '';
@@ -617,6 +672,7 @@
         short_description: f.short_description.value,
         description: f.description.value,
         status: f.status.value,
+        publish_at: f.status.value === 'scheduled' && f.publish_at.value ? new Date(f.publish_at.value).toISOString() : '',
         popular: f.popular.checked,
         editors_choice: f.editors_choice.checked,
         rating_value: f.rating_value.value,
@@ -638,6 +694,7 @@
       box.querySelector('[data-k="version"]').focus();
     });
     dialog.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => dialog.close()));
+    form.status.addEventListener('change', syncPublishAt);
     form.icon.addEventListener('input', updateIconPreview);
     form.name.addEventListener('input', updateIconPreview);
 
