@@ -569,7 +569,8 @@ function fetch_admin_rows(): array
                          FROM games g ORDER BY g.updated_at DESC, g.id DESC')->fetchAll();
     // ipa: some version links off the App Store (an IPA file), same test as save_item's $offStore.
     return array_map(fn($r) => ['id' => (int)$r['id'], 'versions_count' => (int)$r['versions_count'], 'ipa' => (bool)$r['ipa'],
-                                'download_url' => (string)$r['download_url']] + $r, $rows);
+                                'download_url' => (string)$r['download_url'],
+                                'publish_at' => iso_date($r['publish_at'] ?? null)] + $r, $rows);
 }
 
 /** All items, newest first. $full adds descriptions, versions and screenshots. */
