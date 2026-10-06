@@ -27,6 +27,17 @@ return [
         'from' => 'info@ipagame.store',
         'from_name' => 'IPA Game Store',
     ],
+    // Optional: a separate SMTP for the "new app" / announcement emails (the sign-up codes keep using 'mail').
+    // Left out = those emails use 'mail' too. Example: the cPanel mailbox.
+    // 'bulk_mail' => [
+    //     'host' => 'premium362-1.web-hosting.com',
+    //     'port' => 465,
+    //     'secure' => 'ssl',
+    //     'user' => 'info@ipagame.store',
+    //     'pass' => '',
+    //     'from' => 'info@ipagame.store',
+    //     'from_name' => 'IPA Game Store',
+    // ],
     // "Continue with Google": OAuth client ID (Web application) from Google Cloud Console → APIs & Services →
     // Credentials. Authorized JavaScript origins: https://app.ipagame.store (and http://localhost:8099 for dev).
     // Empty = the Google button is hidden.

@@ -21,6 +21,12 @@
       .reg-col i { display: block; width: 100%; max-width: 28px; min-height: 2px; background: var(--accent); border-radius: 4px 4px 0 0; opacity: .85; }
       .reg-col.zero i { background: var(--surface-2); opacity: 1; }
       .reg-col b { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+      .mail-card { margin-top: 12px; display: grid; gap: 10px; }
+      .mail-card textarea { resize: vertical; }
+      .mail-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .mail-row .input { flex: 1 1 200px; min-width: 0; }
+      .mail-bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+      .mail-bar i { display: block; height: 100%; background: var(--accent); }
       .reg-col span { position: absolute; bottom: -18px; font-size: 10px; color: var(--muted); white-space: nowrap; }
     </style>
 </head>
@@ -64,6 +70,7 @@
         <button type="button" role="tab" data-pane="games" aria-selected="true">Games</button>
         <button type="button" role="tab" data-pane="users" aria-selected="false">Users <span class="tab-n" id="usersCount"></span></button>
         <button type="button" role="tab" data-pane="downloads" aria-selected="false">Downloads</button>
+        <button type="button" role="tab" data-pane="emails" aria-selected="false">Emails</button>
         <button type="button" role="tab" data-pane="support" aria-selected="false">Support <span class="sp-n" id="supportCount" hidden></span></button>
       </nav>
 
@@ -156,6 +163,44 @@
       </section>
 
       <!-- Support chat -->
+      <!-- Emails to members -->
+      <section id="emailsPane" hidden>
+        <div class="stat-cards" id="mStats"></div>
+        <p class="muted" id="mWarn" style="font-size:13px;margin:10px 0 0"></p>
+
+        <div class="card mail-card">
+          <div class="reg-title">Announce a game</div>
+          <div class="mail-row">
+            <select class="input" id="mGame" aria-label="Game to announce"></select>
+            <button class="btn" type="button" id="mGameSend">Send to members</button>
+          </div>
+          <div class="muted" style="font-size:13px">New games are emailed automatically when published with “Email members” ticked. Use this to send one again.</div>
+        </div>
+
+        <div class="card mail-card">
+          <div class="reg-title">Custom email</div>
+          <input class="input" id="mSubject" maxlength="150" placeholder="Subject" aria-label="Subject">
+          <textarea class="input" id="mBody" rows="6" maxlength="5000" placeholder="Message (blank line = new paragraph)" aria-label="Message"></textarea>
+          <button class="btn" type="button" id="mCustomSend" style="justify-self:start">Send to members</button>
+        </div>
+
+        <div class="card mail-card">
+          <div class="reg-title">Send a test</div>
+          <div class="mail-row">
+            <input class="input" id="mTo" type="email" placeholder="your@email.com" aria-label="Test address">
+            <button class="btn ghost" type="button" id="mTestGame">Test: game above</button>
+            <button class="btn ghost" type="button" id="mTestCustom">Test: custom email</button>
+          </div>
+        </div>
+
+        <div class="toolbar" style="margin-top:18px">
+          <div class="reg-title">History</div>
+          <span class="spacer"></span>
+          <button class="btn sm ghost" type="button" id="mRun">Send pending now</button>
+        </div>
+        <div class="admin-list" id="mList"></div>
+      </section>
+
       <section id="supportPane" hidden>
         <div class="sp" id="sp">
           <aside class="sp-list">
@@ -274,6 +319,7 @@
         <div class="checks">
           <label class="check"><input type="checkbox" name="popular"> Popular</label>
           <label class="check"><input type="checkbox" name="editors_choice"> Editors' choice</label>
+          <label class="check"><input type="checkbox" name="notify_email"> Email members when this goes live <span class="muted" id="notifiedNote" style="font-size:13px"></span></label>
         </div>
 
         <div class="grid2">
@@ -663,6 +709,8 @@
       syncPublishAt();
       f.popular.checked = !!it?.featured?.popular;
       f.editors_choice.checked = !!it?.featured?.editors_choice;
+      f.notify_email.checked = it ? !!it.notify_email : true;      // new items: on by default
+      $('#notifiedNote').textContent = it?.notified_at ? '(already emailed)' : '';
       f.rating_value.value = it?.rating?.value || '';
       f.rating_count.value = it?.rating?.count || '';
       shots.screenshots = [...(it?.screenshots ?? [])];
@@ -691,6 +739,7 @@
         publish_at: f.status.value === 'scheduled' && f.publish_at.value ? fromLocalInput(f.publish_at.value) : '',
         popular: f.popular.checked,
         editors_choice: f.editors_choice.checked,
+        notify_email: f.notify_email.checked,
         rating_value: f.rating_value.value,
         rating_count: f.rating_count.value,
         screenshots: shots.screenshots,
@@ -747,7 +796,7 @@
       }
     });
 
-    const PANES = ['games', 'users', 'downloads', 'support'];
+    const PANES = ['games', 'users', 'downloads', 'emails', 'support'];
 
     /* ---------- Store users ---------- */
     let users = [];
@@ -762,6 +811,7 @@
       history.replaceState(null, '', name === 'games' ? location.pathname : '#' + name);
       if (name === 'users' && !usersLoaded) refreshUsers();
       if (name === 'downloads') refreshDownloads();
+      if (name === 'emails') refreshMail();
       if (name === 'support') { pollChats(); pollConv(); }
     }
     $('.admin-tabs').addEventListener('click', e => {
@@ -1141,6 +1191,91 @@
       if (document.hidden || $('#dashView').hidden) return;
       pollChats();
       pollConv();
+    });
+
+    /* ---------- Emails ---------- */
+    let mail = null;
+    const mailTimer = { id: 0 };
+
+    async function refreshMail() {
+      try {
+        mail = await api('admin_mail');
+        renderMail();
+      } catch (err) { handleError(err); }
+      // Keep the progress fresh while the tab is open (the cron does the sending).
+      clearTimeout(mailTimer.id);
+      if (!$('#emailsPane').hidden && !document.hidden && mail?.campaigns?.some(c => c.pending)) mailTimer.id = setTimeout(refreshMail, 8000);
+    }
+
+    function renderMail() {
+      if (!mail.ready) {
+        $('#mStats').innerHTML = '';
+        $('#mWarn').textContent = 'Import sql/new_app_emails.sql on the database first.';
+        $('#mList').innerHTML = '';
+        return;
+      }
+      const pending = mail.campaigns.reduce((n, c) => n + c.pending, 0);
+      $('#mStats').innerHTML = [['Subscribed members', mail.subscribers], ['Unsubscribed', mail.unsubscribed], ['Waiting to send', pending]]
+        .map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
+      $('#mWarn').textContent = [!mail.smtp && 'No SMTP in config.php: emails are only saved to data/mail/.', !mail.site_url && "Set 'site_url' in config.php (the cron needs it)."]
+        .filter(Boolean).join(' ');
+      const sel = $('#mGame');
+      const keep = sel.value;
+      sel.innerHTML = mail.games.map(g => `<option value="${g.id}">${esc(g.name)}${g.notified_at ? ' (emailed)' : ''}</option>`).join('');
+      if (keep) sel.value = keep;
+      $('#mList').innerHTML = mail.campaigns.length ? mail.campaigns.map(c => {
+        const done = c.sent + c.failed + c.cancelled;
+        const pct = c.total ? Math.round(done / c.total * 100) : 100;
+        return `<div class="row"><div class="row-info">
+            <div class="row-name">${esc(c.subject)}</div>
+            <div class="row-sub">${esc(slTime(c.created_at))} (SL time) · ${c.sent} / ${c.total} sent${c.failed ? ` · ${c.failed} failed` : ''}${c.cancelled ? ` · ${c.cancelled} skipped` : ''}</div>
+            <div class="mail-bar"><i style="width:${pct}%"></i></div>
+          </div>
+          ${c.pending ? `<div class="row-actions"><button class="btn sm ghost" type="button" data-cancel="${c.id}">Stop (${c.pending} left)</button></div>` : ''}
+        </div>`;
+      }).join('') : '<p class="empty">No emails sent yet.</p>';
+    }
+
+    async function mailPost(action, body, btn) {
+      btn.disabled = true;
+      try {
+        const r = await api(action, { body });
+        await refreshMail();
+        return r;
+      } catch (err) { handleError(err); }
+      finally { btn.disabled = false; }
+    }
+
+    $('#mGameSend').addEventListener('click', async e => {
+      const id = $('#mGame').value;
+      if (!id || !confirm(`Email "${$('#mGame').selectedOptions[0].textContent}" to ${mail.subscribers} members?`)) return;
+      const r = await mailPost('admin_mail_game', { game_id: Number(id) }, e.currentTarget);
+      if (r) toast(`Queued for ${r.total} members`);
+    });
+    $('#mCustomSend').addEventListener('click', async e => {
+      const body = { subject: $('#mSubject').value, body: $('#mBody').value };
+      if (!body.subject.trim() || !body.body.trim()) return toast('Write a subject and a message', true);
+      if (!confirm(`Send this email to ${mail.subscribers} members?`)) return;
+      const r = await mailPost('admin_mail_custom', body, e.currentTarget);
+      if (r) { toast(`Queued for ${r.total} members`); $('#mSubject').value = ''; $('#mBody').value = ''; }
+    });
+    const sendTest = async (btn, extra) => {
+      const to = $('#mTo').value.trim();
+      if (!to) return toast('Enter the email to send the test to', true);
+      btn.disabled = true;
+      try { await api('admin_mail_test', { body: { to, ...extra } }); toast('Test sent'); }
+      catch (err) { handleError(err); }
+      finally { btn.disabled = false; }
+    };
+    $('#mTestGame').addEventListener('click', e => sendTest(e.currentTarget, { game_id: Number($('#mGame').value) }));
+    $('#mTestCustom').addEventListener('click', e => sendTest(e.currentTarget, { subject: $('#mSubject').value, body: $('#mBody').value }));
+    $('#mRun').addEventListener('click', async e => {
+      const r = await mailPost('admin_mail_run', {}, e.currentTarget);
+      if (r) toast(r.note || `Sent ${r.sent}, ${r.pending} waiting`, !!r.note);
+    });
+    $('#mList').addEventListener('click', async e => {
+      const b = e.target.closest('[data-cancel]');
+      if (b && confirm('Stop sending this email? Unsent ones are cancelled.')) await mailPost('admin_mail_cancel', { id: Number(b.dataset.cancel) }, b);
     });
 
     /* ---------- Boot ---------- */

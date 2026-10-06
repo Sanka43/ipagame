@@ -13,7 +13,7 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
 }
 
 /** Sends one email with a plain-text and an HTML part. Returns false (and logs why) on failure. */
-function send_mail(array $cfg, string $to, string $subject, string $text, string $html): bool
+function send_mail(array $cfg, string $to, string $subject, string $text, string $html, array $extra = []): bool
 {
     $from = (string)($cfg['from'] ?? $cfg['user'] ?? '');
     $fromName = (string)($cfg['from_name'] ?? '');
@@ -31,7 +31,7 @@ function send_mail(array $cfg, string $to, string $subject, string $text, string
         'Content-Type' => "multipart/alternative; boundary=\"$boundary\"",
         // Marks it as an automatic message so mail servers do not send out-of-office replies to it.
         'Auto-Submitted' => 'auto-generated',
-    ];
+    ] + $extra;   // e.g. List-Unsubscribe for bulk mail
     $part = fn(string $type, string $body) => "--$boundary\r\n"
         . "Content-Type: $type; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
         . rtrim(chunk_split(base64_encode($body), 76, "\r\n")) . "\r\n";

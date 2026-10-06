@@ -28,6 +28,9 @@ define('SITE_URL', rtrim((string)($config['site_url'] ?? ''), '/'));
 // Store name used in emails; also the default sender name.
 const BRAND = 'IPA Game Store';
 define('MAIL', (array)($config['mail'] ?? []) + ['from' => 'info@ipagame.store', 'from_name' => BRAND]);
+// New-app / announcement emails may use their own SMTP (e.g. the cPanel mailbox) so the sign-up codes
+// keep their own sender; without a 'bulk_mail' block they go through 'mail' as well.
+define('MAIL_BULK', (array)($config['bulk_mail'] ?? []) + MAIL);
 // Social buttons shown on the home page: only http(s) URLs for the known platforms.
 define('SOCIAL', array_filter(array_map(
     fn($u) => preg_match('#^https?://#i', trim((string)$u)) ? trim((string)$u) : '',
@@ -89,7 +92,8 @@ function current_user(): ?array
 {
     if (empty($_SESSION['user_id'])) restore_remembered();
     if (empty($_SESSION['user_id'])) return null;
-    $st = db()->prepare('SELECT id, username, email, created_at, disabled_at, email_verified_at, avatar_url, google_sub FROM users WHERE id=?');
+    // * so a not-yet-imported notify_new_apps column (sql/new_app_emails.sql) cannot break sign-in.
+    $st = db()->prepare('SELECT * FROM users WHERE id=?');
     $st->execute([$_SESSION['user_id']]);
     $u = $st->fetch();
     // Deleted, disabled or un-verified by an admin: signed out at once.
@@ -100,7 +104,7 @@ function current_user(): ?array
     }
     return ['id' => (int)$u['id'], 'username' => $u['username'], 'email' => $u['email'], 'created_at' => iso_date($u['created_at']),
             'avatar' => avatar_of($u), 'custom_avatar' => is_uploaded_avatar($u['avatar_url'] ?? null),
-            'google' => !empty($u['google_sub'])];
+            'google' => !empty($u['google_sub']), 'notify_new_apps' => (bool)($u['notify_new_apps'] ?? true)];
 }
 
 /** The picture to show: an uploaded or Google photo if there is one, else the email's Gravatar. */
@@ -545,6 +549,8 @@ function row_to_item(array $r, array $versions = [], array $shots = []): array
         'license_type' => $r['license_type'] ?? 'app-store-link',
         'status' => $r['status'] ?? 'published',
         'publish_at' => iso_date($r['publish_at'] ?? null),
+        'notify_email' => !empty($r['notify_email']),
+        'notified_at' => iso_date($r['notified_at'] ?? null),
         'created_at' => iso_date($r['created_at'] ?? null),
         'updated_at' => iso_date($r['updated_at'] ?? null),
     ];
@@ -639,6 +645,7 @@ function save_item(array $it, ?int $id): int
         'updated_at' => sql_date($it['updated_at']),
     ];
     if (has_publish_at()) $cols['publish_at'] = $it['publish_at'] !== '' ? sql_date($it['publish_at']) : null;
+    if (has_column('games', 'notify_email')) $cols['notify_email'] = (int)!empty($it['notify_email']);
     if ($id === null) {
         $cols += ['slug' => $it['slug'], 'created_at' => sql_date($it['created_at'])];
         $sql = 'INSERT INTO games (' . implode(',', array_keys($cols)) . ') VALUES (' . rtrim(str_repeat('?,', count($cols)), ',') . ')';
@@ -823,6 +830,8 @@ function clean_item(array $in, ?array $existing): array
         'title' => $name . ' ' . (preg_match('/^v/i', $ver) ? $ver : "v$ver"),
         'meta_description' => $item['short_description'] !== '' ? $item['short_description'] : $name,
     ];
+    // "Email members when this goes live": only changed when sent, so other callers keep what is stored.
+    if (array_key_exists('notify_email', $in)) $item['notify_email'] = !empty($in['notify_email']);
     $status = (string)($in['status'] ?? '');
     $item['publish_at'] = '';
     if ($status === 'scheduled') {
@@ -942,6 +951,207 @@ function chat_post(int $userId, bool $admin, string $text): array
     $st = $pdo->prepare('SELECT * FROM support_messages WHERE id=?');
     $st->execute([$id]);
     return chat_row($st->fetch());
+}
+
+/* ---------- New-app emails to members (tables in sql/new_app_emails.sql) ---------- */
+
+const MAIL_BATCH = 25;       // emails per cron run (the cron runs every minute)
+const MAIL_TRIES = 3;        // attempts per recipient before it counts as failed
+
+function has_column(string $table, string $col): bool
+{
+    static $cache = [];
+    return $cache["$table.$col"] ??= (bool)db()->query("SHOW COLUMNS FROM `$table` LIKE " . db()->quote($col))->fetch();
+}
+
+/** False until sql/new_app_emails.sql has been imported. */
+function mail_ready(): bool
+{
+    return has_column('games', 'notified_at') && has_column('users', 'notify_new_apps');
+}
+
+/** Signed token for a member's unsubscribe link (no extra column needed). */
+function unsub_token(int $uid): string
+{
+    return substr(hash_hmac('sha256', "unsub:$uid", hash('sha256', ADMIN_PASS . '|' . DB['pass'] . '|' . DB['name'])), 0, 32);
+}
+
+function unsub_url(int $uid): string
+{
+    return site_url() . '/api.php?action=unsubscribe&u=' . $uid . '&t=' . unsub_token($uid);
+}
+
+/** [subject, text, html] of one campaign for one member, or null when its game no longer exists. */
+function mail_compose(array $camp, array $u): ?array
+{
+    static $games = [];
+    $brand = BRAND;
+    $site = site_url();
+    $unsub = unsub_url((int)$u['id']);
+    $unsubH = htmlspecialchars($unsub, ENT_QUOTES);
+    $name = htmlspecialchars((string)$u['username'], ENT_QUOTES);
+    $subject = (string)$camp['subject'];
+
+    if ($camp['kind'] === 'game') {
+        $games[$camp['game_id']] ??= find_item((int)$camp['game_id'], null);
+        $g = $games[$camp['game_id']];
+        if (!$g) return null;
+        $link = $site . '/game.html?slug=' . rawurlencode($g['slug']);
+        $icon = preg_match('#^https?://#i', $g['icon']) ? $g['icon'] : ($g['icon'] !== '' ? $site . '/' . ltrim($g['icon'], '/') : '');
+        $ver = $g['latest_version'] !== '' ? 'v' . ltrim($g['latest_version'], 'vV') : '';
+        $title = htmlspecialchars($g['name'], ENT_QUOTES);
+        $desc = htmlspecialchars($g['short_description'], ENT_QUOTES);
+        $kind = $g['type'] === 'app' ? 'app' : 'game';
+        $text = "Hi {$u['username']},\n\nA new $kind just landed on $brand: {$g['name']}" . ($ver ? " ($ver)" : '') . ".\n"
+              . ($g['short_description'] !== '' ? "\n{$g['short_description']}\n" : '') . "\nOpen it in the store: $link\n";
+        $iconHtml = $icon !== '' ? '<img src="' . htmlspecialchars($icon, ENT_QUOTES) . '" width="96" height="96" alt="" style="display:block;margin:0 auto 14px;border-radius:22px">' : '';
+        $inner = <<<HTML
+<p style="margin:0 0 18px;font-size:15px;color:#6b7280">Hi $name, a new $kind just landed on $brand.</p>
+$iconHtml
+<h1 style="margin:0 0 4px;font-size:24px;line-height:1.25">$title</h1>
+<p style="margin:0 0 6px;font-size:13px;color:#7c3aed;font-weight:700">$ver</p>
+<p style="margin:0 0 22px;font-size:15px;line-height:1.5;color:#374151">$desc</p>
+<a href="$link" style="display:inline-block;padding:13px 28px;border-radius:12px;background:#7c3aed;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none">Open in store</a>
+HTML;
+    } else {
+        $paras = array_filter(array_map('trim', preg_split('/\n{2,}/', str_replace("\r\n", "\n", (string)$camp['body']))));
+        $text = "Hi {$u['username']},\n\n" . implode("\n\n", $paras) . "\n";
+        $inner = "<p style=\"margin:0 0 16px;font-size:15px;color:#6b7280\">Hi $name,</p>"
+               . implode('', array_map(fn($p) => '<p style="margin:0 0 14px;font-size:15px;line-height:1.55;color:#374151;text-align:left">'
+                   . nl2br(htmlspecialchars($p, ENT_QUOTES)) . '</p>', $paras));
+    }
+
+    $text .= "\n--\nYou get this because you have an account at $brand. Unsubscribe: $unsub\n";
+    $html = <<<HTML
+<!doctype html>
+<html><body style="margin:0;padding:0;background:#f4f5f7">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 12px">
+<tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#111418">
+    <tr><td style="padding:28px 32px 0;text-align:center;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7c3aed">$brand</td></tr>
+    <tr><td style="padding:18px 32px 28px;text-align:center">$inner</td></tr>
+    <tr><td style="padding:0 32px 28px;text-align:center;font-size:12px;line-height:1.5;color:#9ca3af">
+      You get this because you have an account at $brand.<br><a href="$unsubH" style="color:#9ca3af">Unsubscribe</a>
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body></html>
+HTML;
+    return [$subject, $text, $html];
+}
+
+/** Sends one campaign email. true = sent, false = failed, null = nothing to send (game deleted). */
+function mail_deliver(array $camp, array $u): ?bool
+{
+    $c = mail_compose($camp, $u);
+    if (!$c) return null;
+    $unsub = unsub_url((int)$u['id']);
+    return send_mail(MAIL_BULK, $u['email'], $c[0], $c[1], $c[2], [
+        'List-Unsubscribe' => "<$unsub>",
+        'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
+        'Precedence' => 'bulk',
+    ]);
+}
+
+/** Creates a campaign and queues it for every verified, active member who has not opted out. */
+function mail_enqueue(string $kind, ?int $gameId, string $subject, ?string $body): array
+{
+    $pdo = db();
+    $pdo->prepare('INSERT INTO mail_campaigns (kind, game_id, subject, body, created_at) VALUES (?,?,?,?,UTC_TIMESTAMP())')
+        ->execute([$kind, $gameId, $subject, $body]);
+    $id = (int)$pdo->lastInsertId();
+    $ins = $pdo->prepare('INSERT INTO mail_queue (campaign_id, user_id) SELECT ?, id FROM users
+                          WHERE email_verified_at IS NOT NULL AND disabled_at IS NULL AND notify_new_apps = 1');
+    $ins->execute([$id]);
+    $total = $ins->rowCount();
+    $pdo->prepare('UPDATE mail_campaigns SET total=? WHERE id=?')->execute([$total, $id]);
+    return ['id' => $id, 'total' => $total];
+}
+
+/** Queues the announcement of every game that is now published and was flagged to be emailed. */
+function mail_enqueue_due(): int
+{
+    if (!mail_ready()) return 0;
+    $n = 0;
+    $rows = db()->query("SELECT id, name FROM games WHERE status='published' AND notify_email=1 AND notified_at IS NULL")->fetchAll();
+    foreach ($rows as $g) {
+        // The claim makes sure two runs never queue the same game twice. updated_at stays as it is.
+        $claim = db()->prepare('UPDATE games SET notified_at=UTC_TIMESTAMP(), updated_at=updated_at WHERE id=? AND notified_at IS NULL');
+        $claim->execute([$g['id']]);
+        if ($claim->rowCount() === 1) {
+            mail_enqueue('game', (int)$g['id'], 'New on ' . BRAND . ': ' . $g['name'], null);
+            $n++;
+        }
+    }
+    return $n;
+}
+
+/** One cron run: queue newly published games, then send up to $limit pending emails. */
+function mail_sweep(int $limit = MAIL_BATCH): array
+{
+    $out = ['queued' => 0, 'sent' => 0, 'failed' => 0, 'pending' => 0, 'note' => ''];
+    if (!mail_ready()) return ['note' => 'sql/new_app_emails.sql is not imported'] + $out;
+    $pdo = db();
+    if (!$pdo->query("SELECT GET_LOCK('ipa_mail_sweep', 0)")->fetchColumn()) return ['note' => 'another run is in progress'] + $out;
+    try {
+        $out['queued'] = mail_enqueue_due();
+        $rows = $pdo->query("SELECT q.id, q.campaign_id, q.attempts, u.id AS uid, u.username, u.email, u.disabled_at, u.notify_new_apps
+                             FROM mail_queue q LEFT JOIN users u ON u.id = q.user_id
+                             WHERE q.status='pending' ORDER BY q.id LIMIT " . max(1, $limit))->fetchAll();
+        $camps = [];
+        $set = $pdo->prepare('UPDATE mail_queue SET status=?, attempts=?, sent_at=? WHERE id=?');
+        $strikes = 0;
+        foreach ($rows as $r) {
+            if (!$r['uid'] || $r['disabled_at'] || !$r['notify_new_apps']) {   // gone, blocked or unsubscribed since queueing
+                $set->execute(['cancelled', $r['attempts'], null, $r['id']]);
+                continue;
+            }
+            $camps[$r['campaign_id']] ??= $pdo->query('SELECT * FROM mail_campaigns WHERE id=' . (int)$r['campaign_id'])->fetch();
+            $res = mail_deliver($camps[$r['campaign_id']], ['id' => $r['uid'], 'username' => $r['username'], 'email' => $r['email']]);
+            if ($res === null) {
+                $set->execute(['cancelled', $r['attempts'], null, $r['id']]);
+            } elseif ($res) {
+                $set->execute(['sent', $r['attempts'] + 1, gmdate('Y-m-d H:i:s'), $r['id']]);
+                $out['sent']++;
+                $strikes = 0;
+            } else {
+                $tries = $r['attempts'] + 1;
+                $set->execute([$tries >= MAIL_TRIES ? 'failed' : 'pending', $tries, null, $r['id']]);
+                if ($tries >= MAIL_TRIES) $out['failed']++;
+                if (++$strikes >= 3) { $out['note'] = 'stopped: 3 sends failed in a row (check the SMTP settings)'; break; }
+            }
+        }
+        $out['pending'] = (int)$pdo->query("SELECT COUNT(*) FROM mail_queue WHERE status='pending'")->fetchColumn();
+    } finally {
+        $pdo->query("SELECT RELEASE_LOCK('ipa_mail_sweep')")->fetchAll();
+    }
+    return $out;
+}
+
+/** Numbers and recent campaigns for the admin "Emails" tab. */
+function mail_overview(): array
+{
+    $pdo = db();
+    $subs = $pdo->query('SELECT SUM(notify_new_apps=1) AS yes, SUM(notify_new_apps=0) AS no FROM users
+                         WHERE email_verified_at IS NOT NULL AND disabled_at IS NULL')->fetch();
+    $camps = $pdo->query("SELECT c.id, c.kind, c.game_id, c.subject, c.total, c.created_at, g.name AS game_name,
+                                 COALESCE(SUM(q.status='sent'),0) AS sent, COALESCE(SUM(q.status='failed'),0) AS failed,
+                                 COALESCE(SUM(q.status='pending'),0) AS pending, COALESCE(SUM(q.status='cancelled'),0) AS cancelled
+                          FROM mail_campaigns c LEFT JOIN mail_queue q ON q.campaign_id = c.id LEFT JOIN games g ON g.id = c.game_id
+                          GROUP BY c.id ORDER BY c.id DESC LIMIT 50")->fetchAll();
+    $games = $pdo->query("SELECT id, name, notify_email, notified_at FROM games WHERE status='published' ORDER BY updated_at DESC, id DESC LIMIT 300")->fetchAll();
+    return [
+        'subscribers' => (int)$subs['yes'], 'unsubscribed' => (int)$subs['no'],
+        'smtp' => !empty(MAIL_BULK['host']), 'site_url' => SITE_URL !== '',
+        'games' => array_map(fn($g) => ['id' => (int)$g['id'], 'name' => $g['name'], 'auto' => (bool)$g['notify_email'],
+                                        'notified_at' => iso_date($g['notified_at'])], $games),
+        'campaigns' => array_map(fn($c) => [
+            'id' => (int)$c['id'], 'kind' => $c['kind'], 'subject' => $c['subject'], 'game' => $c['game_name'],
+            'total' => (int)$c['total'], 'sent' => (int)$c['sent'], 'failed' => (int)$c['failed'],
+            'pending' => (int)$c['pending'], 'cancelled' => (int)$c['cancelled'], 'created_at' => iso_date($c['created_at']),
+        ], $camps),
+    ];
 }
 
 if (PHP_SAPI === 'cli') return;   // publish_scheduled.php only needs the functions above
@@ -1263,6 +1473,8 @@ try {
                 $pdo->rollBack();
                 throw $e;
             }
+            // A game published with "Email members" ticked is queued now; the cron sends the emails.
+            try { mail_enqueue_due(); } catch (Throwable $e) { error_log('mail_enqueue_due: ' . $e->getMessage()); }
             respond(['item' => find_item($id, null)]);
 
         case 'delete':
@@ -1378,6 +1590,93 @@ try {
                          'game_id' => $r['game_id'] === null ? null : (int)$r['game_id'], 'game' => $r['game_name'],
                          'version' => $r['version'], 'created_at' => iso_date($r['created_at']),
                      ], $rows)]);
+
+        /* ---------- New-app emails ---------- */
+        // Member: turn the "new app" emails on or off from the account page.
+        case 'set_notify':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Login required', 401);
+            if (!mail_ready()) throw new ApiError('Not available yet', 500);
+            db()->prepare('UPDATE users SET notify_new_apps=? WHERE id=?')->execute([(int)!empty(body()['on']), $me['id']]);
+            respond(['ok' => true]);
+
+        // The link in every email. GET shows a confirm button; the POST (button or mail-client one-click) unsubscribes.
+        case 'unsubscribe':
+            $uid = (int)($_GET['u'] ?? 0);
+            $valid = $uid > 0 && hash_equals(unsub_token($uid), (string)($_GET['t'] ?? ''));
+            $done = false;
+            if ($valid && $_SERVER['REQUEST_METHOD'] === 'POST' && mail_ready()) {
+                db()->prepare('UPDATE users SET notify_new_apps=0 WHERE id=?')->execute([$uid]);
+                $done = true;
+            }
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: no-store');
+            $brand = BRAND;
+            $msg = !$valid ? "<h1>Invalid link</h1><p>This unsubscribe link isn't valid.</p>"
+                 : ($done ? "<h1>You're unsubscribed</h1><p>You won't get new-app emails from $brand any more. You can turn them back on in your account.</p>"
+                          : "<h1>Unsubscribe?</h1><p>Stop new-app emails from $brand?</p><form method=\"post\"><button>Unsubscribe</button></form>");
+            echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+               . '<title>Unsubscribe</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0d12;color:#e8eaed;'
+               . 'font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;text-align:center;padding:20px}main{max-width:380px}h1{font-size:22px}'
+               . 'p{color:#9aa0a6;line-height:1.5}button{border:0;border-radius:12px;background:#7c3aed;color:#fff;font-size:15px;font-weight:700;padding:13px 28px}</style></head>'
+               . "<body><main>$msg</main></body></html>";
+            exit;
+
+        // Admin "Emails" tab: numbers, the games you can announce, recent campaigns.
+        case 'admin_mail':
+            require_admin();
+            if (!mail_ready()) respond(['ready' => false]);
+            respond(['ready' => true] + mail_overview());
+
+        // Queue the announcement of one published game for every subscribed member.
+        case 'admin_mail_game':
+            require_post();
+            require_admin();
+            if (!mail_ready()) throw new ApiError('Import sql/new_app_emails.sql first', 500);
+            $item = find_item((int)(body()['game_id'] ?? 0), null);
+            if (!$item || !is_published($item)) throw new ApiError('Pick a published game', 422);
+            respond(mail_enqueue('game', $item['id'], 'New on ' . BRAND . ': ' . $item['name'], null));
+
+        // Queue a custom message for every subscribed member.
+        case 'admin_mail_custom':
+            require_post();
+            require_admin();
+            if (!mail_ready()) throw new ApiError('Import sql/new_app_emails.sql first', 500);
+            $subject = str_in(body(), 'subject', 150);
+            $text = str_in(body(), 'body', 5000);
+            if ($subject === '' || $text === '') throw new ApiError('Write a subject and a message', 422);
+            respond(mail_enqueue('custom', null, $subject, $text));
+
+        // Send one sample to an address (a custom draft, or a game's announcement) without queueing anything.
+        case 'admin_mail_test':
+            require_post();
+            require_admin();
+            $b = body();
+            $to = mb_strtolower(trim((string)($b['to'] ?? '')));
+            if (!filter_var($to, FILTER_VALIDATE_EMAIL)) throw new ApiError('Enter the email to send the test to', 422);
+            if (!empty($b['game_id'])) {
+                $item = find_item((int)$b['game_id'], null) ?? throw new ApiError('Game not found', 404);
+                $camp = ['kind' => 'game', 'game_id' => $item['id'], 'subject' => 'New on ' . BRAND . ': ' . $item['name'], 'body' => null];
+            } else {
+                $camp = ['kind' => 'custom', 'game_id' => null, 'subject' => str_in($b, 'subject', 150), 'body' => str_in($b, 'body', 5000)];
+                if ($camp['subject'] === '' || $camp['body'] === '') throw new ApiError('Write a subject and a message', 422);
+            }
+            $camp['subject'] = '[Test] ' . $camp['subject'];
+            if (!mail_deliver($camp, ['id' => 0, 'username' => 'there', 'email' => $to])) throw new ApiError('The email could not be sent. Check the SMTP settings.', 502);
+            respond(['ok' => true]);
+
+        // Send a few pending emails right now (what the cron does every minute).
+        case 'admin_mail_run':
+            require_post();
+            require_admin();
+            respond(mail_sweep(10));
+
+        // Stop a campaign: its unsent emails are cancelled.
+        case 'admin_mail_cancel':
+            require_post();
+            require_admin();
+            db()->prepare("UPDATE mail_queue SET status='cancelled' WHERE campaign_id=? AND status='pending'")->execute([(int)(body()['id'] ?? 0)]);
+            respond(['ok' => true]);
 
         /* ---------- Support chat: member side ---------- */
         // New messages after ?after=<id> (marked read). ?peek=1 only returns the unread count (chat closed).
