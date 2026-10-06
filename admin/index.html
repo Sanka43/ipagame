@@ -254,7 +254,7 @@
             </select>
           </div>
           <div class="field" id="publishAtField" style="display:none">
-            <label class="label" for="f-publish-at">Publish at (your local time)</label>
+            <label class="label" for="f-publish-at">Publish at (Sri Lanka time)</label>
             <input class="input" id="f-publish-at" name="publish_at" type="datetime-local">
           </div>
         </div>
@@ -454,7 +454,7 @@
         return `<div class="row">
           ${iconHTML(it, 'sm')}
           <div class="row-info">
-            <div class="row-name">${esc(it.name)} ${isScheduled(it) ? `<span class="badge draft">Scheduled · ${esc(new Date(it.publish_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</span>` : it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''}</div>
+            <div class="row-name">${esc(it.name)} ${isScheduled(it) ? `<span class="badge draft">Scheduled · ${esc(new Date(it.publish_at).toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'medium', timeStyle: 'short' }))} (SL time)</span>` : it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''}</div>
             <div class="row-sub">${esc(meta)}</div>
             ${dl ? `<a class="row-link" href="${esc(asset(dl))}" target="_blank" rel="noopener" title="${esc(dl)}">${esc(dl.replace(/^https?:\/\//i, ''))}</a>` : '<div class="row-sub">No download link</div>'}
           </div>
@@ -559,10 +559,13 @@
     }
 
     // Local date-time input value <-> the ISO time the server stores.
+    // Sri Lanka time is a fixed UTC+5:30 (no DST); the schedule field is always read/written in it.
+    const SL_OFFSET_MS = 330 * 60000;
     const toLocalInput = iso => {
       const d = new Date(iso);
-      return isNaN(d) ? '' : new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      return isNaN(d) ? '' : new Date(d.getTime() + SL_OFFSET_MS).toISOString().slice(0, 16);
     };
+    const fromLocalInput = v => new Date(new Date(v + ':00Z').getTime() - SL_OFFSET_MS).toISOString();
     function isScheduled(it) { return it?.status === 'draft' && !!it.publish_at; }
     const syncPublishAt = () => { $('#publishAtField').style.display = form.status.value === 'scheduled' ? '' : 'none'; };
 
@@ -672,7 +675,7 @@
         short_description: f.short_description.value,
         description: f.description.value,
         status: f.status.value,
-        publish_at: f.status.value === 'scheduled' && f.publish_at.value ? new Date(f.publish_at.value).toISOString() : '',
+        publish_at: f.status.value === 'scheduled' && f.publish_at.value ? fromLocalInput(f.publish_at.value) : '',
         popular: f.popular.checked,
         editors_choice: f.editors_choice.checked,
         rating_value: f.rating_value.value,
