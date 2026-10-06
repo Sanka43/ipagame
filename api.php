@@ -1344,6 +1344,40 @@ try {
             remove_avatar_file($avatar ?: null);
             respond(['ok' => true]);
 
+        /* ---------- Downloads ---------- */
+        // A signed-in member tapped Download on a game page. Guests aren't recorded.
+        case 'track_download':
+            require_post();
+            $me = current_user();
+            if (!$me) respond(['ok' => true]);
+            $b = body();
+            $item = find_item(null, (string)($b['slug'] ?? ''));
+            if (!$item || !is_published($item)) respond(['ok' => true]);
+            $ver = mb_substr(trim((string)($b['version'] ?? '')), 0, 40);
+            // Same member + game + version within a minute counts once (double taps).
+            $dup = db()->prepare('SELECT 1 FROM downloads WHERE user_id=? AND game_id=? AND version=? AND created_at > ?');
+            $dup->execute([$me['id'], $item['id'], $ver, gmdate('Y-m-d H:i:s', time() - 60)]);
+            if (!$dup->fetchColumn()) {
+                db()->prepare('INSERT INTO downloads (user_id, game_id, game_name, version, created_at) VALUES (?,?,?,?,?)')
+                    ->execute([$me['id'], $item['id'], mb_substr($item['name'], 0, 255), $ver, gmdate('Y-m-d H:i:s')]);
+            }
+            respond(['ok' => true]);
+
+        // Latest 1000 downloads by members, plus all-time totals per member.
+        case 'admin_downloads':
+            require_admin();
+            $rows = db()->query('SELECT d.id, d.user_id, d.game_id, d.game_name, d.version, d.created_at, u.username, u.email
+                                 FROM downloads d JOIN users u ON u.id = d.user_id ORDER BY d.id DESC LIMIT 1000')->fetchAll();
+            $tot = db()->query('SELECT COUNT(*) AS n, COUNT(DISTINCT user_id) AS users FROM downloads')->fetch();
+            $per = db()->query('SELECT user_id, COUNT(*) AS n FROM downloads GROUP BY user_id')->fetchAll(PDO::FETCH_KEY_PAIR);
+            respond(['total' => (int)$tot['n'], 'users' => (int)$tot['users'],
+                     'per_user' => (object)array_map('intval', $per),
+                     'downloads' => array_map(fn($r) => [
+                         'id' => (int)$r['id'], 'user_id' => (int)$r['user_id'], 'username' => $r['username'], 'email' => $r['email'],
+                         'game_id' => $r['game_id'] === null ? null : (int)$r['game_id'], 'game' => $r['game_name'],
+                         'version' => $r['version'], 'created_at' => iso_date($r['created_at']),
+                     ], $rows)]);
+
         /* ---------- Support chat: member side ---------- */
         // New messages after ?after=<id> (marked read). ?peek=1 only returns the unread count (chat closed).
         // 403 rather than 401 so an admin browsing the store isn't sent to the sign-in page.

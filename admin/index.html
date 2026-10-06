@@ -63,6 +63,7 @@
       <nav class="admin-tabs" role="tablist" aria-label="Sections">
         <button type="button" role="tab" data-pane="games" aria-selected="true">Games</button>
         <button type="button" role="tab" data-pane="users" aria-selected="false">Users <span class="tab-n" id="usersCount"></span></button>
+        <button type="button" role="tab" data-pane="downloads" aria-selected="false">Downloads</button>
         <button type="button" role="tab" data-pane="support" aria-selected="false">Support <span class="sp-n" id="supportCount" hidden></span></button>
       </nav>
 
@@ -140,6 +141,18 @@
           </select>
         </div>
         <div class="admin-list" id="uList"></div>
+      </section>
+
+      <!-- Downloads by signed-in members -->
+      <section id="downloadsPane" hidden>
+        <div class="stat-cards" id="dStats"></div>
+        <div class="toolbar">
+          <label class="search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="dq" type="search" placeholder="Search user or game" autocomplete="off" aria-label="Search downloads">
+          </label>
+        </div>
+        <div class="admin-list" id="dList"></div>
       </section>
 
       <!-- Support chat -->
@@ -734,7 +747,7 @@
       }
     });
 
-    const PANES = ['games', 'users', 'support'];
+    const PANES = ['games', 'users', 'downloads', 'support'];
 
     /* ---------- Store users ---------- */
     let users = [];
@@ -748,6 +761,7 @@
       for (const p of PANES) $('#' + p + 'Pane').hidden = p !== name;
       history.replaceState(null, '', name === 'games' ? location.pathname : '#' + name);
       if (name === 'users' && !usersLoaded) refreshUsers();
+      if (name === 'downloads') refreshDownloads();
       if (name === 'support') { pollChats(); pollConv(); }
     }
     $('.admin-tabs').addEventListener('click', e => {
@@ -755,10 +769,41 @@
       if (b) showPane(b.dataset.pane);
     });
 
+    /* ---------- Downloads ---------- */
+    let dl = { downloads: [], per_user: {}, total: 0, users: 0 };
+    // "6 Oct 2026, 5:55 AM" in Sri Lanka time.
+    const slTime = iso => new Date(iso).toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'medium', timeStyle: 'short' });
+
+    async function refreshDownloads() {
+      try {
+        dl = await api('admin_downloads');
+        renderDownloads();
+        if (usersLoaded) renderUsers();
+      } catch (err) { handleError(err); }
+    }
+
+    function renderDownloads() {
+      const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' });
+      const today = dl.downloads.filter(d => new Date(d.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' }) === todayKey).length;
+      $('#dStats').innerHTML = [['Downloads', dl.total], ['Today', today], ['Members who downloaded', dl.users]]
+        .map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
+      const q = $('#dq').value.trim().toLowerCase();
+      const list = dl.downloads.filter(d => !q || (d.username + ' ' + d.email + ' ' + d.game).toLowerCase().includes(q));
+      $('#dList').innerHTML = list.length ? list.map(d => `<div class="row">
+          <div class="row-info">
+            <div class="row-name">${esc(d.game)} ${d.version ? `<span class="badge">v${esc(String(d.version).replace(/^v/i, ''))}</span>` : ''}</div>
+            <div class="row-sub">${esc(d.username)} · ${esc(d.email)}</div>
+            <div class="row-sub">${esc(slTime(d.created_at))} (SL time)</div>
+          </div>
+        </div>`).join('') : `<p class="empty">${dl.downloads.length ? 'No downloads match.' : 'No downloads yet.'}</p>`;
+    }
+    $('#dq').addEventListener('input', renderDownloads);
+
     async function refreshUsers() {
       if (!usersLoaded) $('#uList').innerHTML = $('#list .skel-card')?.outerHTML.repeat(4) || '';
       try {
         users = (await api('admin_users')).users;
+        api('admin_downloads').then(r => { dl = r; renderUsers(); }).catch(() => {});
         usersLoaded = true;
         renderUsers();
       } catch (err) { handleError(err); }
@@ -808,7 +853,7 @@
           <div class="row-info">
             <div class="row-name">${esc(u.username)} ${userBadges(u)}</div>
             <div class="row-sub">${esc(u.email)}</div>
-            <div class="row-sub">Joined ${esc(ago(u.created_at))} · ${u.last_login_at ? 'Last sign-in ' + esc(ago(u.last_login_at)) : 'Never signed in'}</div>
+            <div class="row-sub">Joined ${esc(ago(u.created_at))} · ${u.last_login_at ? 'Last sign-in ' + esc(ago(u.last_login_at)) : 'Never signed in'}${dl.per_user[u.id] ? ' · ' + dl.per_user[u.id] + ' download' + (dl.per_user[u.id] > 1 ? 's' : '') : ''}</div>
           </div>
           <div class="row-actions"><button class="btn sm ghost" data-user="${u.id}">Manage</button></div>
         </div>`).join('')

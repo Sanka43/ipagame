@@ -43,7 +43,7 @@
     const dlIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>';
 
     function dlLink(v, label, cls = 'btn') {
-      return `<a class="${cls}" href="${esc(asset(v.download_url))}" rel="nofollow noopener" target="_blank">${dlIcon}${esc(label)}</a>`;
+      return `<a class="${cls}" href="${esc(asset(v.download_url))}" rel="nofollow noopener" target="_blank" data-dl="${esc(v.version)}">${dlIcon}${esc(label)}</a>`;
     }
 
     // Screenshots: App Store images are resized by the URL (e.g. .../320x480bb.jpg -> .../600x0w.jpg).
@@ -188,6 +188,12 @@
         });
       }
     }
+
+    // Record the tap for the admin's Downloads tab (signed-in members only; the server ignores guests).
+    el.addEventListener('click', e => {
+      const a = e.target.closest('[data-dl]');
+      if (a) api('track_download', { body: { slug, version: a.dataset.dl } }).catch(() => {});
+    });
 
     if (!slug) {
       el.innerHTML = '<p class="empty">Game not found.</p>';
