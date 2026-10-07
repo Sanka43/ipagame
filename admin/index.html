@@ -174,7 +174,6 @@
           <div class="card"><div class="reg-title">Top games</div><div class="dl-canvas tall"><canvas id="dGames"></canvas></div></div>
           <div class="card"><div class="reg-title">Top members</div><div class="dl-canvas tall"><canvas id="dMembers"></canvas></div></div>
           <div class="card"><div class="reg-title">Busiest hours <span class="muted" style="font-weight:400;font-size:12px">(Sri Lanka time)</span></div><div class="dl-canvas"><canvas id="dHours"></canvas></div></div>
-          <div class="card"><div class="reg-title">Versions</div><div class="dl-canvas"><canvas id="dVersions"></canvas></div></div>
         </div>
         <p class="muted" id="dNote" style="font-size:12px;margin:8px 0 0"></p>
         <div class="toolbar">
@@ -939,14 +938,6 @@
         type: 'bar',
         data: { labels: hours.map((_, h) => h), datasets: [{ data: hours, backgroundColor: accent, borderRadius: 3 }] },
         options: { ...base, plugins: { ...base.plugins, tooltip: { callbacks: { title: i => `${i[0].label}:00 – ${i[0].label}:59` } } }, scales: scales() },
-      });
-
-      const vers = topN(rows.map(r => ({ v: r.version ? 'v' + String(r.version).replace(/^v/i, '') : 'Unknown' })), 'v', 6);
-      const palette = [accent, '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#64748b'];
-      drawChart('dVersions', {
-        type: 'doughnut',
-        data: { labels: vers.map(v => v[0]), datasets: [{ data: vers.map(v => v[1]), backgroundColor: palette, borderWidth: 0 }] },
-        options: { ...base, cutout: '60%', plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10 } } } },
       });
     }
 
