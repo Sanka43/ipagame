@@ -870,6 +870,10 @@
       return [...m].sort((a, b) => b[1] - a[1]).slice(0, n);
     };
 
+    // Long names get cut with "..." at the end; the tooltip still shows the full name.
+    const clip = (t, n = 20) => t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t;
+    const fullTitle = names => ({ callbacks: { title: i => names[i[0].dataIndex] } });
+
     function drawChart(id, cfg) {
       if (typeof Chart === 'undefined') return;
       dCharts[id]?.destroy();
@@ -922,14 +926,14 @@
       const games = topN(rows, 'game', 8);
       drawChart('dGames', {
         type: 'bar',
-        data: { labels: games.map(g => g[0]), datasets: [{ data: games.map(g => g[1]), backgroundColor: accent, borderRadius: 4 }] },
-        options: { ...base, indexAxis: 'y', scales: scales({ x: { grid: { color: grid }, ticks: { precision: 0 } }, y: { grid: { display: false }, beginAtZero: false } }) },
+        data: { labels: games.map(g => clip(g[0])), datasets: [{ data: games.map(g => g[1]), backgroundColor: accent, borderRadius: 4 }] },
+        options: { ...base, plugins: { ...base.plugins, tooltip: fullTitle(games.map(g => g[0])) }, indexAxis: 'y', scales: scales({ x: { grid: { color: grid }, ticks: { precision: 0 } }, y: { grid: { display: false }, beginAtZero: false } }) },
       });
       const members = topN(rows, 'username', 8);
       drawChart('dMembers', {
         type: 'bar',
-        data: { labels: members.map(g => g[0]), datasets: [{ data: members.map(g => g[1]), backgroundColor: accent, borderRadius: 4 }] },
-        options: { ...base, indexAxis: 'y', scales: scales({ x: { grid: { color: grid }, ticks: { precision: 0 } }, y: { grid: { display: false }, beginAtZero: false } }) },
+        data: { labels: members.map(g => clip(g[0])), datasets: [{ data: members.map(g => g[1]), backgroundColor: accent, borderRadius: 4 }] },
+        options: { ...base, plugins: { ...base.plugins, tooltip: fullTitle(members.map(g => g[0])) }, indexAxis: 'y', scales: scales({ x: { grid: { color: grid }, ticks: { precision: 0 } }, y: { grid: { display: false }, beginAtZero: false } }) },
       });
 
       const hours = Array(24).fill(0);
