@@ -1576,11 +1576,11 @@ try {
             }
             respond(['ok' => true]);
 
-        // Latest 1000 downloads by members, plus all-time totals per member.
+        // Latest 5000 downloads by members, plus all-time totals per member.
         case 'admin_downloads':
             require_admin();
             $rows = db()->query('SELECT d.id, d.user_id, d.game_id, d.game_name, d.version, d.created_at, u.username, u.email
-                                 FROM downloads d JOIN users u ON u.id = d.user_id ORDER BY d.id DESC LIMIT 1000')->fetchAll();
+                                 FROM downloads d JOIN users u ON u.id = d.user_id ORDER BY d.id DESC LIMIT 5000')->fetchAll();
             $tot = db()->query('SELECT COUNT(*) AS n, COUNT(DISTINCT user_id) AS users FROM downloads')->fetch();
             $per = db()->query('SELECT user_id, COUNT(*) AS n FROM downloads GROUP BY user_id')->fetchAll(PDO::FETCH_KEY_PAIR);
             respond(['total' => (int)$tot['n'], 'users' => (int)$tot['users'],
