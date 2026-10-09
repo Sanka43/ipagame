@@ -78,7 +78,12 @@ function skelShelfHTML() {
     </section>`;
 }
 
+// Name / emoji / colours set from the admin Categories tab (sent with the list response).
+let CAT_META = {};
+const setCatMeta = m => { CAT_META = m || {}; };
+
 function catLabel(c) {
+  if (CAT_META[c]?.label) return CAT_META[c].label;
   return (c || '').replace(/-/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
 }
 
@@ -89,7 +94,7 @@ const CAT_ICONS = {
   emulators: '🕹️', communication: '💬', entertainment: '🎬', 'graphics-design': '🎨', 'health-fitness': '💪',
   'photo-video': '📷', productivity: '📋', utilities: '🛠️', education: '🎓',
 };
-const catIcon = c => CAT_ICONS[c] || '🎮';
+const catIcon = c => CAT_META[c]?.emoji || CAT_ICONS[c] || '🎮';
 
 // Gradient pair per category for the Search page cards (dark enough for white text).
 const CAT_COLORS = {
@@ -103,7 +108,10 @@ const CAT_COLORS = {
   'graphics-design': ['#f97316', '#db2777'], 'health-fitness': ['#16a34a', '#0d9488'], 'photo-video': ['#0e7490', '#4f46e5'],
   productivity: ['#d97706', '#ea580c'], utilities: ['#475569', '#334155'], education: ['#1d4ed8', '#6d28d9'],
 };
-const catColors = c => CAT_COLORS[c] || ['#475569', '#1e293b'];
+const catColors = c => {
+  const m = CAT_META[c];
+  return m?.c1 && m?.c2 ? [m.c1, m.c2] : CAT_COLORS[c] || ['#475569', '#1e293b'];
+};
 
 // Bottom tab bar shared by the store pages. `active` is one of the TABS keys (or '' for none).
 const TABS = [

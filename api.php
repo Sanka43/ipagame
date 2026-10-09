@@ -862,6 +862,53 @@ function is_published(array $i): bool
 }
 
 // Fields the store list needs — keeps paged responses small.
+/* ---------- Categories (table in sql/categories.sql; built-ins in CATEGORIES need no row) ---------- */
+
+/** Admin-managed category rows keyed by slug; empty if the table has not been imported yet. */
+function category_rows(): array
+{
+    try {
+        return array_column(db()->query('SELECT slug, type, label, emoji, color1, color2 FROM store_categories')->fetchAll(), null, 'slug');
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/** Built-ins + admin rows + anything items already use, with item counts, for the Categories tab. */
+function admin_category_list(): array
+{
+    $rows = category_rows();
+    $builtin = [];
+    foreach (CATEGORIES as $group => $slugs) foreach ($slugs as $c) $builtin[$c][] = $group === 'games' ? 'game' : 'app';
+    $counts = [];
+    foreach (db()->query("SELECT type, category, COUNT(*) n FROM games WHERE category <> '' GROUP BY type, category")->fetchAll() as $r) {
+        $counts[$r['category']][$r['type'] === 'app' ? 'app' : 'game'] = (int)$r['n'];
+    }
+    // One entry per (type, slug): "music" exists under both Games and Apps.
+    $keys = [];
+    foreach ($builtin as $c => $types) foreach ($types as $t) $keys[$t . '|' . $c] = [$t, $c];
+    foreach ($rows as $c => $r) $keys[$r['type'] . '|' . $c] = [$r['type'], $c];
+    foreach ($counts as $c => $byType) foreach ($byType as $t => $n) $keys[$t . '|' . $c] ??= [$t, $c];
+    $out = [];
+    foreach ($keys as [$t, $c]) {
+        $r = $rows[$c] ?? null;
+        $out[] = ['slug' => $c, 'type' => $t, 'label' => $r['label'] ?? '', 'emoji' => $r['emoji'] ?? '',
+                  'color1' => $r['color1'] ?? '', 'color2' => $r['color2'] ?? '',
+                  'count' => $counts[$c][$t] ?? 0, 'builtin' => isset($builtin[$c]) && in_array($t, $builtin[$c], true),
+                  'custom' => $r !== null && $r['type'] === $t];
+    }
+    usort($out, fn($a, $b) => [$a['type'], $a['slug']] <=> [$b['type'], $b['slug']]);
+    return $out;
+}
+
+/** Name / emoji / colour overrides the store pages apply on top of their built-in look. */
+function category_meta(): array
+{
+    $meta = [];
+    foreach (category_rows() as $c => $r) $meta[$c] = ['label' => $r['label'], 'emoji' => $r['emoji'], 'c1' => $r['color1'], 'c2' => $r['color2']];
+    return $meta;
+}
+
 const LIST_FIELDS = ['id', 'slug', 'type', 'name', 'developer', 'category', 'icon', 'short_description', 'latest_version', 'featured', 'ipa'];
 
 function list_row(array $i): array
@@ -1181,7 +1228,12 @@ try {
             // No page param: the admin panel's list.
             if (!isset($_GET['page'])) {
                 require_admin();
-                respond(['items' => fetch_admin_rows(), 'categories' => CATEGORIES]);
+                $groups = CATEGORIES;
+                foreach (category_rows() as $c => $r) {
+                    $g = $r['type'] === 'app' ? 'apps' : 'games';
+                    if (!in_array($c, $groups[$g], true)) $groups[$g][] = $c;
+                }
+                respond(['items' => fetch_admin_rows(), 'categories' => $groups]);
             }
             $items = fetch_items($all, false);
 
@@ -1234,6 +1286,7 @@ try {
                 'facets' => $facets,
                 'featured' => $featured,
                 'shelves' => $shelves,
+                'category_meta' => (object)category_meta(),
                 'social' => SOCIAL,
             ]);
 
@@ -1505,6 +1558,48 @@ try {
             // Remove its uploaded icon and screenshots if nothing else uses them.
             foreach ([$removed['icon'], ...$removed['screenshots'], ...$removed['ipad_screenshots']] as $url) remove_unused_upload($url);
             respond(['ok' => true]);
+
+        /* ---------- Admin: categories ---------- */
+        case 'admin_categories':
+            require_admin();
+            respond(['categories' => admin_category_list(), 'table' => (bool)db()->query("SHOW TABLES LIKE 'store_categories'")->fetch()]);
+
+        case 'admin_category_save':
+            require_post();
+            require_admin();
+            $b = body();
+            $type = ($b['type'] ?? '') === 'app' ? 'app' : 'game';
+            $label = str_in($b, 'label', 40);
+            if ($label === '') throw new ApiError('Enter a category name');
+            $slug = str_in($b, 'slug', 60) !== '' ? slugify(str_in($b, 'slug', 60)) : slugify($label);
+            $emoji = str_in($b, 'emoji', 8);
+            $col = function (string $k) use ($b): string {
+                $v = str_in($b, $k, 7);
+                return preg_match('/^#[0-9a-f]{6}$/i', $v) ? strtolower($v) : '';
+            };
+            try {
+                db()->prepare('INSERT INTO store_categories (slug, type, label, emoji, color1, color2) VALUES (?,?,?,?,?,?)
+                               ON DUPLICATE KEY UPDATE type=VALUES(type), label=VALUES(label), emoji=VALUES(emoji),
+                                                       color1=VALUES(color1), color2=VALUES(color2)')
+                    ->execute([$slug, $type, $label, $emoji, $col('color1'), $col('color2')]);
+            } catch (PDOException $e) {
+                throw new ApiError('Categories table missing: import sql/categories.sql on the database first', 500);
+            }
+            respond(['categories' => admin_category_list()]);
+
+        case 'admin_category_delete':
+            require_post();
+            require_admin();
+            $slug = str_in(body(), 'slug', 60);
+            $used = db()->prepare('SELECT COUNT(*) FROM games WHERE category=?');
+            $used->execute([$slug]);
+            if ((int)$used->fetchColumn() > 0) throw new ApiError('Move or delete the items in this category first');
+            try {
+                db()->prepare('DELETE FROM store_categories WHERE slug=?')->execute([$slug]);
+            } catch (PDOException $e) {
+                throw new ApiError('Categories table missing: import sql/categories.sql on the database first', 500);
+            }
+            respond(['categories' => admin_category_list()]);
 
         /* ---------- Admin: store users ---------- */
         case 'admin_users':

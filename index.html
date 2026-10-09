@@ -41,7 +41,7 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20261009a"></script>
+  <script src="assets/common.js?v=20261009b"></script>
   <script>
     const $ = s => document.querySelector(s);
     const PER_PAGE = 24;
@@ -392,6 +392,7 @@
         const r = await api('list', { params });
         if (id !== reqId) return;               // a newer request replaced this one
         state.facets = r.facets;
+        setCatMeta(r.category_meta);
         if (!home) state.page = r.page;
         writeUrl(push);
         renderChrome();
