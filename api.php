@@ -588,8 +588,8 @@ function fetch_items(bool $all, bool $full): array
     $rows = db()->query("SELECT $cols FROM games$where ORDER BY updated_at DESC, id DESC")->fetchAll();
     if (!$full) {
         // ipa: some version links off the App Store (same test as the admin list).
-        $ipa = array_flip(db()->query('SELECT DISTINCT game_id FROM game_versions
-                                        WHERE download_url NOT LIKE '%apps.apple.com%'')->fetchAll(PDO::FETCH_COLUMN));
+        $ipa = array_flip(db()->query("SELECT DISTINCT game_id FROM game_versions
+                                        WHERE download_url NOT LIKE '%apps.apple.com%'")->fetchAll(PDO::FETCH_COLUMN));
         return array_map(fn($r) => row_to_item($r) + ['ipa' => isset($ipa[$r['id']])], $rows);
     }
     $vers = group_by_game('SELECT * FROM game_versions ORDER BY id');
