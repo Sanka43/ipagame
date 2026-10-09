@@ -30,6 +30,30 @@
       .mail-row .input { flex: 1 1 200px; min-width: 0; }
       .mail-bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
       .mail-bar i { display: block; height: 100%; background: var(--accent); }
+      .mail-seg { display: flex; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 8px; }
+      .mail-seg i { display: block; height: 100%; transition: width .4s; }
+      .mail-seg .s-sent { background: #10b981; } .mail-seg .s-pending { background: #f59e0b; } .mail-seg .s-failed { background: #ef4444; } .mail-seg .s-cancelled { background: #94a3b8; }
+      .mail-flow { display: flex; align-items: stretch; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+      .mail-flow .step { flex: 1 1 110px; text-align: center; padding: 12px 8px; border-radius: 12px; background: var(--surface-2); border-bottom: 3px solid transparent; }
+      .mail-flow .step b { display: block; font-size: 22px; }
+      .mail-flow .step span { font-size: 12px; color: var(--muted); }
+      .mail-flow .arrow { align-self: center; color: var(--muted); }
+      .mail-flow .st-sent { border-color: #10b981; } .mail-flow .st-pending { border-color: #f59e0b; } .mail-flow .st-failed { border-color: #ef4444; } .mail-flow .st-cancelled { border-color: #94a3b8; }
+      .mail-flow .live b::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: #f59e0b; animation: mailpulse 1s infinite; vertical-align: middle; }
+      @keyframes mailpulse { 50% { opacity: .2; } }
+      .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; margin-left: 6px; vertical-align: middle; }
+      .pill.sent { background: #10b98126; color: #10b981; } .pill.pending { background: #f59e0b26; color: #f59e0b; }
+      .pill.failed { background: #ef444426; color: #ef4444; } .pill.cancelled { background: #94a3b826; color: #94a3b8; }
+      .mail-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; margin-top: 6px; color: var(--muted); }
+      .mail-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+      .mail-detail { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; width: 100%; }
+      .mail-detail .tabs { display: inline-flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+      .mail-detail .tabs button { border: 0; background: var(--surface-2); color: var(--muted); font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 99px; cursor: pointer; }
+      .mail-detail .tabs button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+      .mail-rcp { max-height: 260px; overflow: auto; display: grid; gap: 2px; }
+      .mail-rcp > div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+      .mail-rcp > div > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .row.mail-row-c { flex-wrap: wrap; }
       .reg-col span { position: absolute; bottom: -18px; font-size: 10px; color: var(--muted); white-space: nowrap; }
     </style>
 </head>
@@ -190,6 +214,16 @@
       <section id="emailsPane" hidden>
         <div class="stat-cards" id="mStats"></div>
         <p class="muted" id="mWarn" style="font-size:13px;margin:10px 0 0"></p>
+
+        <div class="card" id="mFlowCard" style="margin-top:12px">
+          <div class="reg-title">Mail process</div>
+          <div class="muted" style="font-size:13px">Every email goes Queued → Waiting → Sent or Failed. The cron sends a few each minute; a failed one is tried 3 times.</div>
+          <div class="mail-flow" id="mFlow"></div>
+        </div>
+        <div class="dl-grid">
+          <div class="card"><div class="reg-title">Sent per day <span class="muted" style="font-weight:400;font-size:12px">(last 14 days, SL time)</span></div><div class="dl-canvas"><canvas id="mDaily"></canvas></div></div>
+          <div class="card"><div class="reg-title">Recent emails by result</div><div class="dl-canvas"><canvas id="mCamps"></canvas></div></div>
+        </div>
 
         <div class="card mail-card">
           <div class="reg-title">Announce a game</div>
@@ -1341,9 +1375,14 @@
         $('#mList').innerHTML = '';
         return;
       }
-      const pending = mail.campaigns.reduce((n, c) => n + c.pending, 0);
-      $('#mStats').innerHTML = [['Subscribed members', mail.subscribers], ['Unsubscribed', mail.unsubscribed], ['Waiting to send', pending]]
+      const T = mail.totals;
+      $('#mStats').innerHTML = [['Subscribed members', mail.subscribers], ['Unsubscribed', mail.unsubscribed], ['Sent', T.sent], ['Waiting to send', T.pending], ['Failed', T.failed]]
         .map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
+      const queued = T.sent + T.pending + T.failed + T.cancelled;
+      const step = (cls, n, label, live) => `<div class="step st-${cls}${live ? ' live' : ''}"><b>${n}</b><span>${label}</span></div>`;
+      $('#mFlow').innerHTML = step('queued', queued, 'Queued') + '<span class="arrow">→</span>' + step('pending', T.pending, T.pending ? 'Sending…' : 'Waiting', T.pending > 0) +
+        '<span class="arrow">→</span>' + step('sent', T.sent, 'Sent') + step('failed', T.failed, 'Failed') + step('cancelled', T.cancelled, 'Skipped');
+      renderMailCharts();
       $('#mWarn').textContent = [!mail.smtp && 'No SMTP in config.php: emails are only saved to data/mail/.', !mail.site_url && "Set 'site_url' in config.php (the cron needs it)."]
         .filter(Boolean).join(' ');
       const sel = $('#mGame');
@@ -1351,16 +1390,70 @@
       sel.innerHTML = mail.games.map(g => `<option value="${g.id}">${esc(g.name)}${g.notified_at ? ' (emailed)' : ''}</option>`).join('');
       if (keep) sel.value = keep;
       $('#mList').innerHTML = mail.campaigns.length ? mail.campaigns.map(c => {
-        const done = c.sent + c.failed + c.cancelled;
-        const pct = c.total ? Math.round(done / c.total * 100) : 100;
-        return `<div class="row"><div class="row-info">
-            <div class="row-name">${esc(c.subject)}</div>
-            <div class="row-sub">${esc(slTime(c.created_at))} (SL time) · ${c.sent} / ${c.total} sent${c.failed ? ` · ${c.failed} failed` : ''}${c.cancelled ? ` · ${c.cancelled} skipped` : ''}</div>
-            <div class="mail-bar"><i style="width:${pct}%"></i></div>
+        const pc = n => c.total ? n / c.total * 100 : 0;
+        const state = c.pending ? ['pending', 'Sending'] : c.failed && !c.sent ? ['failed', 'Failed'] : c.failed ? ['failed', 'Partly failed'] : c.total && c.cancelled === c.total ? ['cancelled', 'Cancelled'] : ['sent', 'Done'];
+        const open = openCamp === c.id;
+        return `<div class="row mail-row-c"><div class="row-info" style="min-width:0">
+            <div class="row-name">${esc(c.subject)}<span class="pill ${state[0]}">${state[1]}</span></div>
+            <div class="row-sub">${esc(slTime(c.created_at))} (SL time) · ${c.total} recipients</div>
+            <div class="mail-seg" title="${c.sent} sent, ${c.pending} waiting, ${c.failed} failed, ${c.cancelled} skipped">
+              <i class="s-sent" style="width:${pc(c.sent)}%"></i><i class="s-pending" style="width:${pc(c.pending)}%"></i><i class="s-failed" style="width:${pc(c.failed)}%"></i><i class="s-cancelled" style="width:${pc(c.cancelled)}%"></i>
+            </div>
+            <div class="mail-legend"><span><i style="background:#10b981"></i>${c.sent} sent</span><span><i style="background:#f59e0b"></i>${c.pending} waiting</span><span><i style="background:#ef4444"></i>${c.failed} failed</span><span><i style="background:#94a3b8"></i>${c.cancelled} skipped</span></div>
           </div>
-          ${c.pending ? `<div class="row-actions"><button class="btn sm ghost" type="button" data-cancel="${c.id}">Stop (${c.pending} left)</button></div>` : ''}
+          <div class="row-actions">
+            ${c.failed ? `<button class="btn sm ghost" type="button" data-retry="${c.id}">Retry ${c.failed} failed</button>` : ''}
+            ${c.pending ? `<button class="btn sm ghost" type="button" data-cancel="${c.id}">Stop (${c.pending} left)</button>` : ''}
+            <button class="btn sm ghost" type="button" data-detail="${c.id}">${open ? 'Hide' : 'Details'}</button>
+          </div>
+          ${open ? `<div class="mail-detail" id="mDetail${c.id}">Loading…</div>` : ''}
         </div>`;
       }).join('') : '<p class="empty">No emails sent yet.</p>';
+      if (openCamp) loadDetail(openCamp);
+    }
+
+    /* Per-email detail: who got it, who is waiting, who failed */
+    let openCamp = 0, detailTab = 'all', detailRows = [];
+    const STATUS_LABEL = { sent: 'Sent', pending: 'Waiting', failed: 'Failed', cancelled: 'Skipped' };
+    async function loadDetail(id) {
+      try { detailRows = (await api('admin_mail_detail', { params: { id } })).recipients; } catch (err) { return handleError(err); }
+      paintDetail(id);
+    }
+    function paintDetail(id) {
+      const box = $('#mDetail' + id);
+      if (!box) return;
+      const count = st => detailRows.filter(r => st === 'all' || r.status === st).length;
+      const rows = detailRows.filter(r => detailTab === 'all' || r.status === detailTab);
+      box.innerHTML = `<div class="tabs">${['all', 'sent', 'pending', 'failed', 'cancelled'].map(t =>
+          `<button type="button" data-tab="${t}" aria-pressed="${t === detailTab}">${t === 'all' ? 'All' : STATUS_LABEL[t]} (${count(t)})</button>`).join('')}</div>
+        <div class="mail-rcp">${rows.length ? rows.map(r => `<div><span>${esc(r.username)} · ${esc(r.email)}</span>
+          <span><span class="pill ${r.status}">${STATUS_LABEL[r.status]}</span>${r.status === 'sent' && r.sent_at ? ' <span class="muted">' + esc(slTime(r.sent_at)) + '</span>' : r.attempts ? ' <span class="muted">' + r.attempts + ' tries</span>' : ''}</span></div>`).join('')
+          : '<p class="empty" style="margin:8px 0">Nobody in this group.</p>'}</div>`;
+    }
+
+    function renderMailCharts() {
+      if (typeof Chart === 'undefined') return;
+      const css = getComputedStyle(document.documentElement);
+      const grid = css.getPropertyValue('--border').trim() || 'rgba(128,128,128,.25)';
+      Chart.defaults.color = css.getPropertyValue('--muted').trim() || '#888';
+      Chart.defaults.font.size = 11;
+      const now = slKey(new Date());
+      const days = Array.from({ length: 14 }, (_, i) => addDays(now, i - 13));
+      drawChart('mDaily', {
+        type: 'bar',
+        data: { labels: days.map(k => keyDate(k).getUTCDate() + ' ' + MON[keyDate(k).getUTCMonth()]), datasets: [{ data: days.map(k => mail.daily[k] || 0), backgroundColor: '#10b981', borderRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+          scales: { x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } }, y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } } } },
+      });
+      const recent = mail.campaigns.slice(0, 8).reverse();
+      const ds = (k, label, color) => ({ label, data: recent.map(c => c[k]), backgroundColor: color });
+      drawChart('mCamps', {
+        type: 'bar',
+        data: { labels: recent.map(c => clip(c.subject, 22)), datasets: [ds('sent', 'Sent', '#10b981'), ds('pending', 'Waiting', '#f59e0b'), ds('failed', 'Failed', '#ef4444'), ds('cancelled', 'Skipped', '#94a3b8')] },
+        options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10 } }, tooltip: { callbacks: { title: i => recent[i[0].dataIndex].subject } } },
+          scales: { x: { stacked: true, beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } }, y: { stacked: true, grid: { display: false } } } },
+      });
     }
 
     async function mailPost(action, body, btn) {
@@ -1401,6 +1494,16 @@
       if (r) toast(r.note || `Sent ${r.sent}, ${r.pending} waiting`, !!r.note);
     });
     $('#mList').addEventListener('click', async e => {
+      const t = e.target.closest('[data-tab]');
+      if (t) { detailTab = t.dataset.tab; return paintDetail(openCamp); }
+      const d = e.target.closest('[data-detail]');
+      if (d) { const id = Number(d.dataset.detail); openCamp = openCamp === id ? 0 : id; detailTab = 'all'; return renderMail(); }
+      const r = e.target.closest('[data-retry]');
+      if (r) {
+        const res = await mailPost('admin_mail_retry', { id: Number(r.dataset.retry) }, r);
+        if (res) toast(`${res.retried} put back in the queue`);
+        return;
+      }
       const b = e.target.closest('[data-cancel]');
       if (b && confirm('Stop sending this email? Unsent ones are cancelled.')) await mailPost('admin_mail_cancel', { id: Number(b.dataset.cancel) }, b);
     });

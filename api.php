@@ -1144,7 +1144,13 @@ function mail_overview(): array
                           FROM mail_campaigns c LEFT JOIN mail_queue q ON q.campaign_id = c.id LEFT JOIN games g ON g.id = c.game_id
                           GROUP BY c.id ORDER BY c.id DESC LIMIT 50")->fetchAll();
     $games = $pdo->query("SELECT id, name, notify_email, notified_at FROM games WHERE status='published' ORDER BY updated_at DESC, id DESC LIMIT 300")->fetchAll();
+    $tot = $pdo->query("SELECT COALESCE(SUM(status='sent'),0) AS sent, COALESCE(SUM(status='failed'),0) AS failed,
+                               COALESCE(SUM(status='pending'),0) AS pending, COALESCE(SUM(status='cancelled'),0) AS cancelled FROM mail_queue")->fetch();
+    // Sent per day in Sri Lanka time (UTC+5:30), last 14 days.
+    $daily = $pdo->query("SELECT DATE(DATE_ADD(sent_at, INTERVAL 330 MINUTE)) AS d, COUNT(*) AS n FROM mail_queue
+                          WHERE status='sent' AND sent_at > UTC_TIMESTAMP() - INTERVAL 15 DAY GROUP BY d")->fetchAll(PDO::FETCH_KEY_PAIR);
     return [
+        'totals' => array_map('intval', $tot), 'daily' => (object)array_map('intval', $daily),
         'subscribers' => (int)$subs['yes'], 'unsubscribed' => (int)$subs['no'],
         'smtp' => !empty(MAIL_BULK['host']), 'site_url' => SITE_URL !== '',
         'games' => array_map(fn($g) => ['id' => (int)$g['id'], 'name' => $g['name'], 'auto' => (bool)$g['notify_email'],
@@ -1673,6 +1679,26 @@ try {
             require_post();
             require_admin();
             respond(mail_sweep(10));
+
+        // Every recipient of one campaign with where their email stands.
+        case 'admin_mail_detail':
+            require_admin();
+            if (!mail_ready()) throw new ApiError('Import sql/new_app_emails.sql first', 500);
+            $st = db()->prepare('SELECT q.id, q.status, q.attempts, q.sent_at, u.username, u.email
+                                 FROM mail_queue q LEFT JOIN users u ON u.id = q.user_id WHERE q.campaign_id=? ORDER BY q.id LIMIT 2000');
+            $st->execute([(int)($_GET['id'] ?? 0)]);
+            respond(['recipients' => array_map(fn($r) => [
+                'id' => (int)$r['id'], 'status' => $r['status'], 'attempts' => (int)$r['attempts'],
+                'sent_at' => iso_date($r['sent_at']), 'username' => $r['username'] ?? '(deleted)', 'email' => $r['email'] ?? '',
+            ], $st->fetchAll())]);
+
+        // Put a campaign's failed emails back in the queue for another go.
+        case 'admin_mail_retry':
+            require_post();
+            require_admin();
+            $st = db()->prepare("UPDATE mail_queue SET status='pending', attempts=0 WHERE campaign_id=? AND status='failed'");
+            $st->execute([(int)(body()['id'] ?? 0)]);
+            respond(['ok' => true, 'retried' => $st->rowCount()]);
 
         // Stop a campaign: its unsent emails are cancelled.
         case 'admin_mail_cancel':
