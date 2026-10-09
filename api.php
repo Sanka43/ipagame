@@ -996,14 +996,17 @@ function mail_compose(array $camp, array $u): ?array
         $games[$camp['game_id']] ??= find_item((int)$camp['game_id'], null);
         $g = $games[$camp['game_id']];
         if (!$g) return null;
-        $link = $site . '/game.html?slug=' . rawurlencode($g['slug']);
+        // Opens on the main ipagame.store site (a plain Safari page); a link into the store would also open in Safari, without the member's login.
+        $link = ($g['category'] ?? '') !== ''
+            ? 'https://ipagame.store/ipa-games/' . rawurlencode($g['category']) . '/' . rawurlencode(preg_replace('/-ipa$/', '', $g['slug'])) . '-ipa/'
+            : $site . '/game.html?slug=' . rawurlencode($g['slug']);
         $icon = preg_match('#^https?://#i', $g['icon']) ? $g['icon'] : ($g['icon'] !== '' ? $site . '/' . ltrim($g['icon'], '/') : '');
         $ver = $g['latest_version'] !== '' ? 'v' . ltrim($g['latest_version'], 'vV') : '';
         $title = htmlspecialchars($g['name'], ENT_QUOTES);
         $desc = htmlspecialchars($g['short_description'], ENT_QUOTES);
         $kind = $g['type'] === 'app' ? 'app' : 'game';
         $text = "Hi {$u['username']},\n\nA new $kind just landed on $brand: {$g['name']}" . ($ver ? " ($ver)" : '') . ".\n"
-              . ($g['short_description'] !== '' ? "\n{$g['short_description']}\n" : '') . "\nOpen it in the store: $link\n";
+              . ($g['short_description'] !== '' ? "\n{$g['short_description']}\n" : '') . "\nOpen it: $link\n";
         $iconHtml = $icon !== '' ? '<img src="' . htmlspecialchars($icon, ENT_QUOTES) . '" width="96" height="96" alt="" style="display:block;margin:0 auto 14px;border-radius:22px">' : '';
         $inner = <<<HTML
 <p style="margin:0 0 18px;font-size:15px;color:#6b7280">Hi $name, a new $kind just landed on $brand.</p>
@@ -1011,7 +1014,7 @@ $iconHtml
 <h1 style="margin:0 0 4px;font-size:24px;line-height:1.25">$title</h1>
 <p style="margin:0 0 6px;font-size:13px;color:#7c3aed;font-weight:700">$ver</p>
 <p style="margin:0 0 22px;font-size:15px;line-height:1.5;color:#374151">$desc</p>
-<a href="$link" style="display:inline-block;padding:13px 28px;border-radius:12px;background:#7c3aed;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none">Open in store</a>
+<a href="$link" style="display:inline-block;padding:13px 28px;border-radius:12px;background:#7c3aed;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none">View game</a>
 HTML;
     } else {
         $paras = array_filter(array_map('trim', preg_split('/\n{2,}/', str_replace("\r\n", "\n", (string)$camp['body']))));
