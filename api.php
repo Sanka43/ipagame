@@ -63,7 +63,7 @@ const CATEGORIES = [
     'games' => ['action', 'adventure', 'arcade', 'casual', 'puzzle', 'racing', 'role-playing', 'simulation', 'strategy',
                 'sports', 'board', 'card', 'casino', 'family', 'music', 'trivia', 'word'],
     'apps'  => ['communication', 'entertainment', 'graphics-design', 'health-fitness', 'photo-video', 'productivity',
-                'utilities', 'education', 'music'],
+                'utilities', 'education', 'music', 'emulators'],
 ];
 // 'review' and 'removed' are set on the other site (rights check); only 'published' is public.
 const STATUSES = ['published', 'draft', 'review', 'removed'];

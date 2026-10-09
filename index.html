@@ -470,7 +470,7 @@
       e.preventDefault();
       const tab = a.dataset.tab;
       const again = tab === activeTab() && !state.cat && state.page === 1;
-      Object.assign(state, { cat: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' || tab === 'ipa' ? tab : '' });
+      Object.assign(state, { cat: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' ? tab : '' });
       if (tab !== 'search' || !again) { state.q = ''; $('#q').value = ''; }
       window.scrollTo({ top: 0 });
       if (tab === 'search') $('#q').focus();

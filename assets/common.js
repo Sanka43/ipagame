@@ -86,6 +86,8 @@ const CAT_ICONS = {
   action: '⚔️', adventure: '🧭', arcade: '👾', casual: '🎈', puzzle: '🧩', racing: '🏎️',
   'role-playing': '🐉', simulation: '🏗️', strategy: '♟️', sports: '⚽', board: '🎲', card: '🃏',
   casino: '🎰', family: '👨‍👩‍👧', music: '🎵', trivia: '❓', word: '🔤',
+  emulators: '🕹️', communication: '💬', entertainment: '🎬', 'graphics-design': '🎨', 'health-fitness': '💪',
+  'photo-video': '📷', productivity: '📋', utilities: '🛠️', education: '🎓',
 };
 const catIcon = c => CAT_ICONS[c] || '🎮';
 
@@ -97,6 +99,9 @@ const CAT_COLORS = {
   sports: ['#15803d', '#0f766e'], board: ['#92400e', '#c2410c'], card: ['#be123c', '#7e22ce'],
   casino: ['#991b1b', '#d97706'], family: ['#0891b2', '#2563eb'], music: ['#c026d3', '#7c3aed'],
   trivia: ['#1d4ed8', '#0891b2'], word: ['#4338ca', '#0e7490'],
+  emulators: ['#7c3aed', '#2563eb'], communication: ['#0284c7', '#0891b2'], entertainment: ['#db2777', '#7c3aed'],
+  'graphics-design': ['#f97316', '#db2777'], 'health-fitness': ['#16a34a', '#0d9488'], 'photo-video': ['#0e7490', '#4f46e5'],
+  productivity: ['#d97706', '#ea580c'], utilities: ['#475569', '#334155'], education: ['#1d4ed8', '#6d28d9'],
 };
 const catColors = c => CAT_COLORS[c] || ['#475569', '#1e293b'];
 
@@ -104,8 +109,7 @@ const catColors = c => CAT_COLORS[c] || ['#475569', '#1e293b'];
 const TABS = [
   ['home', 'Home', './', '<path fill="currentColor" fill-rule="evenodd" d="M7.5 2h9A3.5 3.5 0 0 1 20 5.5v13a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 18.5v-13A3.5 3.5 0 0 1 7.5 2zM8.2 5.8a1 1 0 0 0-1 1v5.4a1 1 0 0 0 1 1h7.6a1 1 0 0 0 1-1V6.8a1 1 0 0 0-1-1zM8.1 15.8a.9.9 0 0 0 0 1.8h7.8a.9.9 0 0 0 0-1.8z"/>'],
   ['game', 'Games', './?type=game', '<path fill="currentColor" fill-rule="evenodd" d="M21 3c-4.9-.4-8.8 1.5-11.5 5.4L6 8.8a1 1 0 0 0-.8.5L3.4 12.6a.6.6 0 0 0 .6.9l3.2-.4 3.7 3.7-.4 3.2a.6.6 0 0 0 .9.6l3.3-1.8a1 1 0 0 0 .5-.8l.4-3.5C19.5 11.8 21.4 7.9 21 3zM15.4 10.4a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8z"/><path fill="currentColor" d="M6.4 15.4c-1.7.4-2.8 2-3 4.6 2.6-.2 4.2-1.3 4.6-3z"/>'],
-  // IPA: a file with an "IPA" label, drawn in currentColor so it follows the tab bar's light / dark ink.
-  ['ipa', 'IPA', './?type=ipa', '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.5V4.6A1.6 1.6 0 0 1 9.1 3H15l5.5 5.5v10.9a1.6 1.6 0 0 1-1.6 1.6H9.1a1.6 1.6 0 0 1-1.6-1.6V17M15 3v5.5h5.5"/><rect x="1.9" y="8.5" width="13.2" height="8.5" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><text x="8.5" y="14.8" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Arial, sans-serif" font-size="5.4" font-weight="800" fill="currentColor">IPA</text>'],
+  ['app', 'Apps', './?type=app', '<path fill="currentColor" d="M12 2.5 3 7.2l9 4.7 9-4.7z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m3 12 9 4.7 9-4.7M3 16.8l9 4.7 9-4.7"/>'],
   ['search', 'Search', './?search=1', '<circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="m15.5 15.5 5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>'],
 ];
 
