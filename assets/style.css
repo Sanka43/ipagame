@@ -975,3 +975,9 @@ main.wrap { position: relative; display: flow-root; }   /* flow-root: title marg
   .sp-list { border-right: 0; }
   .sp-back { display: grid; }
 }
+
+/* All / App Store / IPA switch under the Games title */
+.seg { display: flex; gap: 6px; margin: 12px 0 4px; flex-wrap: wrap; }
+.seg button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px;
+  padding: 7px 16px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }

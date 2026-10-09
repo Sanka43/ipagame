@@ -10,13 +10,14 @@
   <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20261002b">
+  <link rel="stylesheet" href="assets/style.css?v=20261009a">
 </head>
 <body data-auth="required">
   <main class="wrap">
     <div id="today" hidden></div>
 
     <h1 class="page-title" id="pageTitle" hidden></h1>
+    <div class="seg" id="sourceBar" role="group" aria-label="Filter games by source" hidden></div>
 
     <label class="search" id="searchBox">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -47,12 +48,13 @@
     const SHELF_SIZE = 9;                        // 3 columns of 3 cards
     // type: '' | 'game' | 'app' | 'ipa' (names ending in "IPA"); cat: '' | category slug — they combine (e.g. Games → Puzzle).
     // search: the Search tab is open (stays open while the query is cleared).
-    const state = { type: '', cat: '', q: '', search: false, page: 1, facets: null };
+    const state = { type: '', source: '', cat: '', q: '', search: false, page: 1, facets: null };
     const TYPE_LABELS = { game: 'Games', app: 'Apps', ipa: 'IPA Games' };
 
     function readUrl() {
       const p = new URLSearchParams(location.search);
       state.type = p.get('type') || '';
+      state.source = ['ipa', 'store'].includes(p.get('source')) ? p.get('source') : '';
       state.cat = p.get('cat') || '';
       state.q = (p.get('q') || '').trim().toLowerCase();
       state.search = p.has('search') || !!state.q;
@@ -63,6 +65,7 @@
     function writeUrl(push) {
       const p = new URLSearchParams();
       if (state.type) p.set('type', state.type);
+      if (state.source && state.type === 'game') p.set('source', state.source);
       if (state.cat) p.set('cat', state.cat);
       if (state.q) p.set('q', state.q);
       else if (state.search) p.set('search', '1');
@@ -343,6 +346,11 @@
       const title = v === 'search' ? 'Search' : v === 'shelves' ? TYPE_LABELS[state.type] : '';
       $('#pageTitle').textContent = title || '';
       $('#pageTitle').hidden = !title;
+      // All / App Store / IPA switch on the Games tab (shelves and category lists).
+      const bar = $('#sourceBar');
+      bar.hidden = !(state.type === 'game' && (v === 'shelves' || v === 'list'));
+      bar.innerHTML = [['', 'All'], ['store', 'App Store'], ['ipa', 'IPA']].map(([k, l]) =>
+        `<button type="button" data-source="${k}" aria-pressed="${state.source === k}">${l}</button>`).join('');
       $('#listSection').hidden = v === 'today' || v === 'shelves' || idle;
       if (v !== 'shelves') $('#shelves').innerHTML = '';
       $('#listTitle').textContent = (v === 'search' && state.cat ? catIcon(state.cat) + ' ' : '') + listTitle();
@@ -351,7 +359,7 @@
     // Which view (tab + type + category) is currently on screen with real data. Switching to a
     // different one shows a skeleton; paging or typing a search within it just dims the old results.
     let shown = '';
-    const viewKey = v => [v, state.type, state.cat].join('|');
+    const viewKey = v => [v, state.type, state.source, state.cat].join('|');
 
     function showSkeleton(v) {
       if (v === 'today') $('#today').innerHTML = todaySkelHTML();
@@ -372,6 +380,7 @@
         : v === 'shelves' ? { page: 1, per_page: 1, shelves: SHELF_SIZE }
         : { page: state.page, per_page: PER_PAGE };
       if (state.type) params.type = state.type;
+      if (state.source && state.type === 'game') params.source = state.source;
       if (state.cat) params.category = state.cat;
       if (state.q) params.q = state.q;
 
@@ -429,6 +438,14 @@
       window.scrollTo({ top: 0 });
     });
 
+    $('#sourceBar').addEventListener('click', e => {
+      const b = e.target.closest('button[data-source]');
+      if (!b || b.dataset.source === state.source) return;
+      state.source = b.dataset.source;
+      state.page = 1;
+      load({ push: true });
+    });
+
     $('#clearCat').addEventListener('click', () => {
       state.cat = '';
       state.page = 1;
@@ -440,7 +457,7 @@
       const a = e.target.closest('.see-all, .cat-tile, [data-tab-link]');
       if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
       e.preventDefault();
-      if (a.dataset.tabLink) Object.assign(state, { type: a.dataset.tabLink, cat: '' });
+      if (a.dataset.tabLink) Object.assign(state, { type: a.dataset.tabLink, cat: '', source: '' });
       else state.cat = a.dataset.cat;
       state.page = 1;
       load({ push: true });
@@ -470,7 +487,7 @@
       e.preventDefault();
       const tab = a.dataset.tab;
       const again = tab === activeTab() && !state.cat && state.page === 1;
-      Object.assign(state, { cat: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' ? tab : '' });
+      Object.assign(state, { cat: '', source: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' ? tab : '' });
       if (tab !== 'search' || !again) { state.q = ''; $('#q').value = ''; }
       window.scrollTo({ top: 0 });
       if (tab === 'search') $('#q').focus();

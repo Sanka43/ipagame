@@ -586,7 +586,12 @@ function fetch_items(bool $all, bool $full): array
                           is_popular, is_editors_choice, tags, status, updated_at';
     $where = $all ? '' : " WHERE status='published'";
     $rows = db()->query("SELECT $cols FROM games$where ORDER BY updated_at DESC, id DESC")->fetchAll();
-    if (!$full) return array_map('row_to_item', $rows);
+    if (!$full) {
+        // ipa: some version links off the App Store (same test as the admin list).
+        $ipa = array_flip(db()->query('SELECT DISTINCT game_id FROM game_versions
+                                        WHERE download_url NOT LIKE '%apps.apple.com%'')->fetchAll(PDO::FETCH_COLUMN));
+        return array_map(fn($r) => row_to_item($r) + ['ipa' => isset($ipa[$r['id']])], $rows);
+    }
     $vers = group_by_game('SELECT * FROM game_versions ORDER BY id');
     $shots = group_by_game('SELECT game_id, device, url FROM game_screenshots ORDER BY sort, id');
     return array_map(fn($r) => row_to_item($r, $vers[$r['id']] ?? [], $shots[$r['id']] ?? []), $rows);
@@ -857,15 +862,18 @@ function is_published(array $i): bool
 }
 
 // Fields the store list needs — keeps paged responses small.
-const LIST_FIELDS = ['id', 'slug', 'type', 'name', 'developer', 'category', 'icon', 'short_description', 'latest_version', 'featured'];
+const LIST_FIELDS = ['id', 'slug', 'type', 'name', 'developer', 'category', 'icon', 'short_description', 'latest_version', 'featured', 'ipa'];
 
 function list_row(array $i): array
 {
     return array_intersect_key($i, array_flip(LIST_FIELDS));
 }
 
-function matches_filters(array $i, string $type, string $cat, string $q): bool
+function matches_filters(array $i, string $type, string $cat, string $q, string $source = ''): bool
 {
+    // Games tab filter: "ipa" = has an IPA file download, "store" = App Store links only.
+    if ($source === 'ipa' && empty($i['ipa'])) return false;
+    if ($source === 'store' && !empty($i['ipa'])) return false;
     // "ipa" is the IPA tab: games whose name ends in "IPA" (e.g. "Minecraft IPA").
     if ($type === 'ipa') {
         if (!preg_match('/\bIPA$/i', trim($i['name'] ?? ''))) return false;
@@ -1180,6 +1188,7 @@ try {
             $type = (string)($_GET['type'] ?? '');
             $cat = (string)($_GET['category'] ?? '');
             $q = mb_strtolower(trim((string)($_GET['q'] ?? '')));
+            $source = in_array($_GET['source'] ?? '', ['ipa', 'store'], true) ? $_GET['source'] : '';
             $facets = ['types' => [], 'categories' => []];
             $counts = [];
             foreach ($items as $i) {
@@ -1187,7 +1196,7 @@ try {
                 if (empty($i['category'])) continue;
                 $facets['categories'][$i['category']] = true;
                 // Counts are scoped to the selected type so "Games" only shows game categories.
-                if (matches_filters($i, $type, '', '')) $counts[$i['category']] = ($counts[$i['category']] ?? 0) + 1;
+                if (matches_filters($i, $type, '', '', $source)) $counts[$i['category']] = ($counts[$i['category']] ?? 0) + 1;
             }
             $facets = ['types' => array_keys($facets['types']), 'categories' => array_keys($facets['categories'])];
             sort($facets['categories']);
@@ -1196,7 +1205,7 @@ try {
 
             $featured = array_values(array_map('list_row', array_filter($items,
                 fn($i) => !empty($i['featured']['popular']) || !empty($i['featured']['editors_choice']))));
-            $filtered = array_values(array_filter($items, fn($i) => matches_filters($i, $type, $cat, $q)));
+            $filtered = array_values(array_filter($items, fn($i) => matches_filters($i, $type, $cat, $q, $source)));
 
             // Home page shelves: the newest N items of each category, biggest category first.
             $shelves = [];
