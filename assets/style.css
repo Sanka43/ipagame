@@ -208,6 +208,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .stat .v { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .desc { white-space: pre-line; overflow-wrap: anywhere; }
+.desc .dh { font-size: 1.05em; }
 /* Screenshots: a swipeable row that runs to the screen edges, and a full-screen viewer. */
 .shots {
   display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;

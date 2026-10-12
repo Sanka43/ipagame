@@ -132,7 +132,7 @@
         ${it.description || it.short_description ? `
           <h2 class="section-title">About</h2>
           <div class="desc-wrap clamp">
-            <p class="desc">${esc(it.description || it.short_description)}</p>
+            <p class="desc">${descHtml(it.description || it.short_description)}</p>
             <button type="button" class="link-btn desc-more">more</button>
           </div>` : ''}
 

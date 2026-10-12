@@ -45,6 +45,18 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Description text from the admin: "# / ## / ###" lines become bold headings, *text* bold, _text_ italic (symbols hidden).
+function descHtml(s) {
+  return String(s ?? '').split('\n').map(line => {
+    const h = line.match(/^\s*#{1,3}\s+(.+?)\s*#*\s*$/);
+    const inline = t => esc(t)
+      .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, '<strong>$1</strong>')
+      .replace(/(?<![\w*])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![\w*])/g, '<strong>$1</strong>')
+      .replace(/(?<![\w_])_(?=[^\s_])(.+?)(?<=[^\s_])_(?![\w_])/g, '<em>$1</em>');
+    return h ? `<strong class="dh">${inline(h[1])}</strong>` : inline(line);
+  }).join('\n');
+}
+
 // Resolve stored paths ("uploads/icons/x.png") relative to the site root.
 function asset(p) {
   if (!p) return '';
