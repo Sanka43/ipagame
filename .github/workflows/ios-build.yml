@@ -27,12 +27,17 @@ jobs:
       - name: Build
         working-directory: ios
         run: |
+          set -o pipefail
           xcodebuild -project IPAGame.xcodeproj -scheme IPAGame \
             -configuration Release -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee build.log || {
+              # Surface the compiler errors as annotations (visible on the run summary).
+              grep -E "error:" build.log | sort -u | head -15 | while IFS= read -r l; do echo "::error::${l//%/%25}"; done
+              exit 1
+            }
 
       - name: Package IPA
         working-directory: ios
