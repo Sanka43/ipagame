@@ -158,7 +158,23 @@ function store_avatar(array $f): string
  * Checks a Google Sign-In ID token with Google and returns its claims
  * (sub, email, email_verified, name, picture), or throws.
  */
-function google_claims(string $credential): array
+function google_claims(string $credential, int $maxAgeSeconds = 0): array
+{
+    // Every failed check counts toward the sign-in rate limit, and a blocked client never reaches Google.
+    throttle_login();
+    try {
+        $c = google_claims_check($credential);
+        if ($maxAgeSeconds > 0 && time() - (int)($c['iat'] ?? 0) > $maxAgeSeconds) {
+            throw new ApiError('Please sign in with Google again to confirm.', 401);
+        }
+        return $c;
+    } catch (ApiError $e) {
+        rate_hit('login:' . client_ip());
+        throw $e;
+    }
+}
+
+function google_claims_check(string $credential): array
 {
     if (GOOGLE_CLIENT_ID === '') throw new ApiError('Google sign-in is not set up', 400);
     if (!preg_match('/^[\w-]+\.[\w-]+\.[\w-]+$/', $credential)) throw new ApiError('Google sign-in failed. Try again.', 401);
@@ -1480,6 +1496,10 @@ try {
             $u = $st->fetch();
             if ($u) {
                 if ($u['disabled_at']) throw new ApiError('This account has been disabled. Contact support if you think this is a mistake.', 403);
+                // An email can change hands at Google: never re-link an account that belongs to another Google identity.
+                if (!empty($u['google_sub']) && !hash_equals((string)$u['google_sub'], (string)$c['sub'])) {
+                    throw new ApiError('This email is linked to a different Google account. Sign in with your password instead.', 403);
+                }
                 // Google has confirmed the email, so link it and count it as verified.
                 $set = ['google_sub' => $c['sub'], 'email_verified_at' => $u['email_verified_at'] ?: gmdate('Y-m-d H:i:s')];
                 // An unverified sign-up with this email may have been made by someone else, who would
@@ -1532,7 +1552,7 @@ try {
             $row = $st->fetch();
             if (isset(body()['credential'])) {
                 // Google accounts may have no known password: a fresh Google sign-in confirms instead.
-                $c = google_claims((string)body()['credential']);
+                $c = google_claims((string)body()['credential'], 600);
                 if (empty($row['google_sub']) || !hash_equals((string)$row['google_sub'], (string)$c['sub'])) {
                     throw new ApiError('That Google account is not linked to this account', 403);
                 }

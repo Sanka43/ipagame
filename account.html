@@ -304,7 +304,13 @@
     let leaving = false;
     const goBack = () => {
       leaving = true;
-      location.replace(next && /^\/(?![\/\\])/.test(next) ? next : './');
+      // Same-origin paths only. Parsing (not a regex) catches tricks like "/<tab>/evil.com", which browsers read as "//evil.com".
+      let dest = './';
+      try {
+        const u = new URL(next || '', location.origin);
+        if (next && next.startsWith('/') && u.origin === location.origin) dest = u.pathname + u.search + u.hash;
+      } catch {}
+      location.replace(dest);
     };
 
     const VIEWS = { login: 'Sign In', register: 'Create Account', verify: 'Verify Email', forgot: 'Forgot Password', reset: 'Reset Password', profile: 'Account', delete: 'Delete Account' };
