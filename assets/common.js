@@ -168,6 +168,11 @@ async function playInstalled(slug, version) {
     name = await fetchBundleName(slug, version);
     if (name) installedSetBundle(slug, name);
   }
+  // The IPA couldn't be read: LiveContainer names the game after the app itself, so try the store name without the trailing "IPA".
+  if (!name && entry && entry.name) {
+    const guess = entry.name.replace(/\s*[(\[]?IPA[)\]]?\s*$/i, '').trim();
+    if (guess) name = guess + '.app';
+  }
   if (name) { location.href = 'livecontainer://livecontainer-launch?bundle-name=' + encodeURIComponent(name); return; }
   alert('Could not find this game inside LiveContainer automatically. LiveContainer will open: tap the game there to play.');
   location.href = 'livecontainer://';
