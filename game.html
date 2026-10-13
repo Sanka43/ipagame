@@ -22,7 +22,7 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20261009b"></script>
+  <script src="assets/common.js?v=20261013a"></script>
   <script>
     const el = document.getElementById('content');
     document.getElementById('tabbar').innerHTML = tabBarHTML();
@@ -43,11 +43,9 @@
     const dlIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>';
 
     // Inside the iOS app a tapped IPA download is handed to LiveContainer (installs by itself), so the button becomes Play.
-    const inApp = /IPAGameApp/.test(navigator.userAgent);
+    const inApp = IN_APP;
     const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"/></svg>';
-    const instKey = 'ipa-installed:' + slug;
-    const isInstalled = () => { try { return localStorage.getItem(instKey) === '1'; } catch { return false; } };
-    const setInstalled = on => { try { on ? localStorage.setItem(instKey, '1') : localStorage.removeItem(instKey); } catch {} };
+    const isInstalled = () => installedHas(slug);
     const isIpa = v => !String(v.download_url).includes('apps.apple.com');
 
     function dlLink(v, label, cls = 'btn') {
@@ -208,19 +206,17 @@
       const play = e.target.closest('[data-play]');
       if (play) {
         e.preventDefault();
-        api('ipa_app_name', { params: { slug, version: play.dataset.play } })
-          .then(r => { location.href = 'livecontainer://livecontainer-launch' + (r.name ? '?bundle-name=' + encodeURIComponent(r.name) : ''); })
-          .catch(() => { location.href = 'livecontainer://'; });
+        playInstalled(slug, play.dataset.play);
         return;
       }
       const again = e.target.closest('[data-redownload]');
-      if (again) { e.preventDefault(); setInstalled(false); render(current); return; }
+      if (again) { e.preventDefault(); installedRemove(slug); render(current); return; }
 
       const a = e.target.closest('[data-dl]');
       if (!a) return;
       api('track_download', { body: { slug, version: a.dataset.dl } }).catch(() => {});
       if (inApp && !a.href.includes('apps.apple.com')) {
-        setInstalled(true);
+        if (current) installedAdd(current, a.dataset.dl);
         // Let the tap hand off to LiveContainer first, then swap Download for Play.
         setTimeout(() => { if (current) render(current); }, 800);
       }
