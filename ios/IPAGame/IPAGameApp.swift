@@ -68,6 +68,10 @@ struct WebContainer: UIViewRepresentable {
             guard let url = navigationAction.request.url else { return decisionHandler(.allow) }
             let scheme = url.scheme?.lowercased() ?? ""
             if scheme == "about" || scheme == "blob" || scheme == "data" { return decisionHandler(.allow) }
+            if isIPA(url) {
+                installInLiveContainer(url)
+                return decisionHandler(.cancel)
+            }
             if (scheme == "http" || scheme == "https") && isInternal(url.host) && !navigationAction.shouldPerformDownload {
                 return decisionHandler(.allow)
             }
@@ -95,7 +99,8 @@ struct WebContainer: UIViewRepresentable {
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                      for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             if let url = navigationAction.request.url {
-                if isInternal(url.host) { webView.load(navigationAction.request) } else { UIApplication.shared.open(url) }
+                if isIPA(url) { installInLiveContainer(url) }
+                else if isInternal(url.host) { webView.load(navigationAction.request) } else { UIApplication.shared.open(url) }
             }
             return nil
         }
@@ -114,6 +119,31 @@ struct WebContainer: UIViewRepresentable {
                 alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
                 alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
             }
+        }
+
+        private func isIPA(_ url: URL) -> Bool {
+            let s = url.scheme?.lowercased() ?? ""
+            return (s == "http" || s == "https") && url.path.lowercased().hasSuffix(".ipa")
+        }
+
+        /// Hand the IPA straight to LiveContainer, which downloads and installs it itself.
+        private func installInLiveContainer(_ ipa: URL) {
+            var allowed = CharacterSet.urlQueryAllowed
+            allowed.remove(charactersIn: "&=+?#")
+            guard let enc = ipa.absoluteString.addingPercentEncoding(withAllowedCharacters: allowed),
+                  let lc = URL(string: "livecontainer://install?url=\(enc)"),
+                  UIApplication.shared.canOpenURL(lc) else {
+                present(UIAlertController(title: "LiveContainer needed",
+                                          message: "Install LiveContainer first, then tap Download again to install the game automatically.",
+                                          preferredStyle: .alert)) { alert in
+                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                    alert.addAction(UIAlertAction(title: "How to install", style: .default) { [weak self] _ in
+                        self?.web?.load(URLRequest(url: siteURL.appendingPathComponent("install.html")))
+                    })
+                }
+                return
+            }
+            UIApplication.shared.open(lc)
         }
 
         private func present(_ alert: UIAlertController, configure: (UIAlertController) -> Void) {
