@@ -104,7 +104,7 @@ struct WebContainer: UIViewRepresentable {
                 }
             }
             session.presentationContextProvider = self
-            session.prefersEphemeralSession = false      // reuse the Google account already signed in on this iPhone
+            session.prefersEphemeralWebBrowserSession = false      // reuse the Google account already signed in on this iPhone
             authSession = session
             if !session.start() {
                 authSession = nil
