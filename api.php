@@ -1833,14 +1833,14 @@ try {
         // Google sign-in for the iOS app. The app opens this URL in a system browser sheet (ASWebAuthenticationSession),
         // because Google refuses OAuth inside embedded web views. GET shows the Google button (redirect mode);
         // Google then POSTs the ID token back here and we hand it to the app through ipagame://auth.
-        // Needs this exact URL under "Authorized redirect URIs" of the OAuth client.
+        // Needs https://<site>/google_app.php under "Authorized redirect URIs" of the OAuth client.
         case 'google_app':
             header('Content-Type: text/html; charset=utf-8');
             header('Cache-Control: no-store');
             $page = fn(string $body) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
                 . '<title>Sign in with Google</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;'
                 . 'font:16px -apple-system,system-ui,sans-serif;background:#0b0b10;color:#eee;text-align:center"><div style="padding:24px">' . $body . '</div>';
-            $selfUri = site_url() . '/api.php?action=google_app';
+            $selfUri = site_url() . '/google_app.php';
             if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $cred = (string)($_POST['credential'] ?? '');
                 $csrf = (string)($_POST['g_csrf_token'] ?? '');

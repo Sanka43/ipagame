@@ -86,8 +86,8 @@ struct WebContainer: UIViewRepresentable {
         }
 
         private func startGoogleSignIn(nonce: String) {
-            var c = URLComponents(url: siteURL.appendingPathComponent("api.php"), resolvingAgainstBaseURL: false)!
-            c.queryItems = [URLQueryItem(name: "action", value: "google_app"), URLQueryItem(name: "nonce", value: nonce)]
+            var c = URLComponents(url: siteURL.appendingPathComponent("google_app.php"), resolvingAgainstBaseURL: false)!
+            c.queryItems = [URLQueryItem(name: "nonce", value: nonce)]
             let session = ASWebAuthenticationSession(url: c.url!, callbackURLScheme: "ipagame") { [weak self] url, error in
                 guard let self else { return }
                 self.authSession = nil
