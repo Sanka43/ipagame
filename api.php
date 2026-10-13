@@ -753,6 +753,36 @@ function str_in(array $in, string $key, int $max): string
 }
 
 // Only http(s) links or local uploads/ paths — never javascript: etc.
+/** One ranged GET (cURL, falling back to streams): [bytes, totalSize] when the host answers 206, else null. */
+function ipa_http_range(string $src, string $range): ?array
+{
+    $ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+    $origin = (parse_url($src, PHP_URL_SCHEME) ?: 'https') . '://' . parse_url($src, PHP_URL_HOST) . '/';
+    if (function_exists('curl_init')) {
+        $ch = curl_init($src);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_RANGE => $range, CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5, CURLOPT_TIMEOUT => 20, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_USERAGENT => $ua, CURLOPT_REFERER => $origin,
+        ]);
+        $raw = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $hsize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+        if (!is_string($raw) || $code !== 206) return null;      // 200 = the host ignored Range (would be the whole file)
+        // Redirects leave several header blocks; the last one belongs to the data.
+        $heads = preg_split('#\r?\n\r?\n#', trim(substr($raw, 0, $hsize)));
+        $head = end($heads);
+        return preg_match('#Content-Range:\s*bytes\s+\d+-\d+/(\d+)#i', $head, $m) ? [substr($raw, $hsize), (int)$m[1]] : null;
+    }
+    $ctx = stream_context_create(['http' => ['header' => "Range: bytes=$range\r\nReferer: $origin\r\nUser-Agent: $ua\r\n", 'timeout' => 20]]);
+    $b = @file_get_contents($src, false, $ctx);
+    if ($b === false) return null;
+    foreach ($http_response_header ?? [] as $h) {
+        if (preg_match('#^Content-Range:\s*bytes\s+\d+-\d+/(\d+)#i', $h, $m)) return [$b, (int)$m[1]];
+    }
+    return null;
+}
+
 /** Read a byte range from a local path or http(s) URL; returns [bytes, totalSize] or null. */
 function ipa_range(string $src, int $start, int $len, bool $fromEnd = false): ?array
 {
@@ -767,35 +797,13 @@ function ipa_range(string $src, int $start, int $len, bool $fromEnd = false): ?a
         fclose($h);
         return [$b, $total];
     }
-    $range = $fromEnd ? "-$len" : $start . '-' . ($start + $len - 1);
-    $ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-    $origin = (parse_url($src, PHP_URL_SCHEME) ?: 'https') . '://' . parse_url($src, PHP_URL_HOST) . '/';
-    if (function_exists('curl_init')) {
-        $ch = curl_init($src);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_RANGE => $range, CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_MAXREDIRS => 5, CURLOPT_TIMEOUT => 20, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_USERAGENT => $ua, CURLOPT_REFERER => $origin,
-        ]);
-        $raw = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $hsize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
-        if (!is_string($raw) || $code !== 206) return null;      // 200 = the host ignored Range (would be the whole file)
-        $head = substr($raw, 0, $hsize);
-        $b = substr($raw, $hsize);
-        return preg_match('#Content-Range:\s*bytes\s+\d+-\d+/(\d+)#i', $head, $m) ? [$b, (int)$m[1]] : null;
-    }
-    $ctx = stream_context_create(['http' => ['header' => "Range: bytes=$range
-Referer: $origin
-User-Agent: $ua
-", 'timeout' => 20]]);
-    $b = @file_get_contents($src, false, $ctx);
-    if ($b === false) return null;
-    $total = null;
-    foreach ($http_response_header ?? [] as $h) {
-        if (preg_match('#^Content-Range:\s*bytes\s+\d+-\d+/(\d+)#i', $h, $m)) $total = (int)$m[1];
-    }
-    return $total === null ? null : [$b, $total];
+    if (!$fromEnd) return ipa_http_range($src, $start . '-' . ($start + $len - 1));
+    // Some hosts (GitHub release assets) refuse "last N bytes": learn the size with a 1-byte read, then ask by position.
+    $probe = ipa_http_range($src, '0-0');
+    if (!$probe) return null;
+    $total = $probe[1];
+    $from = max(0, $total - $len);
+    return ipa_http_range($src, $from . '-' . ($total - 1));
 }
 
 /** "Game.app" folder name inside an IPA's Payload/ (LiveContainer's bundle-name), read from the zip directory only. */
