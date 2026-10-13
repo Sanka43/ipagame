@@ -27,6 +27,8 @@
 
     <div id="shelves"></div>
 
+    <section id="installedSec" hidden><div class="list" id="installedList"></div></section>
+
     <section id="listSection">
       <h2 class="section-title">
         <span class="lt"><span id="listTitle">All</span><button type="button" class="clear-cat" id="clearCat" aria-label="Clear category" hidden>✕</button></span>
@@ -41,14 +43,14 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20261013a"></script>
+  <script src="assets/common.js?v=20261013b"></script>
   <script>
     const $ = s => document.querySelector(s);
     const PER_PAGE = 24;
     const SHELF_SIZE = 9;                        // 3 columns of 3 cards
     // type: '' | 'game' | 'app' | 'ipa' (names ending in "IPA"); cat: '' | category slug — they combine (e.g. Games → Puzzle).
     // search: the Search tab is open (stays open while the query is cleared).
-    const state = { type: '', source: '', cat: '', q: '', search: false, page: 1, facets: null };
+    const state = { type: '', source: '', cat: '', q: '', search: false, installed: false, page: 1, facets: null };
     const TYPE_LABELS = { game: 'Games', app: 'Apps', ipa: 'IPA Games' };
 
     function readUrl() {
@@ -58,12 +60,14 @@
       state.cat = p.get('cat') || '';
       state.q = (p.get('q') || '').trim().toLowerCase();
       state.search = p.has('search') || !!state.q;
+      state.installed = p.has('installed');
       state.page = Math.max(1, parseInt(p.get('page'), 10) || 1);
       $('#q').value = p.get('q') || '';
     }
 
     function writeUrl(push) {
       const p = new URLSearchParams();
+      if (state.installed) p.set('installed', '1');
       if (state.type) p.set('type', state.type);
       if (state.source && state.type === 'game') p.set('source', state.source);
       if (state.cat) p.set('cat', state.cat);
@@ -329,8 +333,44 @@
     }
 
     // Views: Home tab = 'today'; Games/Apps tabs = category 'shelves'; a category or search = paged 'list'.
-    const view = () => state.search ? 'search' : state.cat ? 'list' : state.type ? 'shelves' : 'today';
-    const activeTab = () => state.search ? 'search' : state.type || 'home';
+    const view = () => state.installed ? 'installed' : state.search ? 'search' : state.cat ? 'list' : state.type ? 'shelves' : 'today';
+    const activeTab = () => state.installed ? 'installed' : state.search ? 'search' : state.type || 'home';
+
+    // Installed tab (iOS app): games downloaded on this device, each with a Play button (runs in LiveContainer).
+    function renderInstalled() {
+      const items = installedList();
+      $('#installedList').innerHTML = items.length
+        ? items.map(it => `<div class="app-card">
+            <a href="game.html?slug=${encodeURIComponent(it.slug)}" style="display:contents">
+              ${iconHTML(it)}
+              <div class="row-info">
+                <div class="card-name">${esc(it.name)}</div>
+                <div class="card-ver">${it.version ? 'v' + esc(String(it.version).replace(/^v/i, '')) : ''}</div>
+                <div class="card-sub"><button type="button" class="link-btn" data-remove="${esc(it.slug)}">Remove from list</button></div>
+              </div>
+            </a>
+            <a class="get" href="#" data-play="${esc(it.slug)}" data-ver="${esc(it.version)}">Play</a>
+          </div>`).join('')
+        : `<p class="empty">${IN_APP
+            ? 'No games installed yet.<br>Download a game and it will show up here with a Play button.'
+            : 'Installed games are shown in the IPA Game app on your iPhone.'}</p>`;
+    }
+
+    $('#installedList').addEventListener('click', e => {
+      const rm = e.target.closest('[data-remove]');
+      if (rm) { e.preventDefault(); e.stopPropagation(); installedRemove(rm.dataset.remove); renderInstalled(); return; }
+      const p = e.target.closest('[data-play]');
+      if (p) { e.preventDefault(); playInstalled(p.dataset.play, p.dataset.ver); }
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && state.installed) renderInstalled(); });
+
+    // Last list response per view, kept on the device: shown at once on launch / when coming back, then refreshed.
+    const lcKey = params => 'lc:' + JSON.stringify(params);
+    function lcGet(params) { try { return localStorage.getItem(lcKey(params)); } catch { return null; } }
+    function lcSet(params, text) {
+      try { localStorage.setItem(lcKey(params), text); }
+      catch { try { Object.keys(localStorage).filter(k => k.startsWith('lc:')).forEach(k => localStorage.removeItem(k)); } catch {} }
+    }
 
     function renderChrome() {
       $('#tabbar').innerHTML = tabBarHTML(activeTab());
@@ -342,8 +382,10 @@
       $('#today').hidden = v !== 'today';
       // The search box and category cards live on the Search tab only.
       $('#searchBox').hidden = v !== 'search';
+      $('#shelves').hidden = v === 'installed';
       $('#clearCat').hidden = !(v === 'search' && state.cat);
-      const title = v === 'search' ? 'Search' : v === 'shelves' ? TYPE_LABELS[state.type] : '';
+      $('#installedSec').hidden = v !== 'installed';
+      const title = v === 'search' ? 'Search' : v === 'shelves' ? TYPE_LABELS[state.type] : v === 'installed' ? 'Installed' : '';
       $('#pageTitle').textContent = title || '';
       $('#pageTitle').hidden = !title;
       // All / App Store / IPA switch on the Games tab (shelves and category lists).
@@ -351,7 +393,7 @@
       bar.hidden = !(state.type === 'game' && (v === 'shelves' || v === 'list'));
       bar.innerHTML = [['', 'All'], ['store', 'App Store'], ['ipa', 'IPA']].map(([k, l]) =>
         `<button type="button" data-source="${k}" aria-pressed="${state.source === k}">${l}</button>`).join('');
-      $('#listSection').hidden = v === 'today' || v === 'shelves' || idle;
+      $('#listSection').hidden = v === 'today' || v === 'shelves' || v === 'installed' || idle;
       if (v !== 'shelves') $('#shelves').innerHTML = '';
       $('#listTitle').textContent = (v === 'search' && state.cat ? catIcon(state.cat) + ' ' : '') + listTitle();
     }
@@ -375,6 +417,13 @@
     async function load({ push = false, scroll = false } = {}) {
       const id = ++reqId;
       const v = view();
+      if (v === 'installed') {
+        renderChrome();
+        renderInstalled();
+        writeUrl(push);
+        if (scroll) window.scrollTo({ top: 0 });
+        return;
+      }
       const home = v === 'today' || v === 'shelves';
       const params = v === 'today' ? { page: 1, per_page: 10, shelves: SHELF_SIZE }
         : v === 'shelves' ? { page: 1, per_page: 1, shelves: SHELF_SIZE }
@@ -384,23 +433,18 @@
       if (state.cat) params.category = state.cat;
       if (state.q) params.q = state.q;
 
-      renderChrome();
-      const key = viewKey(v);
-      if (key !== shown) { shown = ''; showSkeleton(v); }
-      else $('#list').classList.add('loading');
-      try {
-        const r = await api('list', { params });
-        if (id !== reqId) return;               // a newer request replaced this one
+      // Paint a list response. `fresh` = from the network (cache paints skip URL / hero-image work).
+      function paint(r, fresh) {
         state.facets = r.facets;
         setCatMeta(r.category_meta);
         if (!home) state.page = r.page;
-        writeUrl(push);
+        if (fresh) writeUrl(push);
         renderChrome();
         shown = key;
         if (v === 'today') {
           $('#today').innerHTML = todayHTML(r);
           startHeroSlider();
-          heroPicks(r).forEach(h => loadHeroImage(h.slug, id));
+          if (fresh) heroPicks(r).forEach(h => loadHeroImage(h.slug, id));
           if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
@@ -418,8 +462,28 @@
           : `<p class="empty">${state.q || state.type || state.cat ? 'Nothing matches your search.' : 'No games yet.'}</p>`;
         $('#pager').innerHTML = pagerHTML(r.page, r.pages);
         if (scroll) $('#listTitle').closest('section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      renderChrome();
+      const key = viewKey(v);
+      let cachedText = null;
+      if (key !== shown) {
+        cachedText = state.q ? null : lcGet(params);        // no cache for typed searches
+        let cached = null;
+        try { cached = cachedText && JSON.parse(cachedText); } catch {}
+        if (cached) paint(cached, false);
+        else { cachedText = null; shown = ''; showSkeleton(v); }
+      } else $('#list').classList.add('loading');
+      try {
+        const res = await api('list', { params });
+        if (id !== reqId) return;               // a newer request replaced this one
+        const text = JSON.stringify(res);
+        if (!state.q) lcSet(params, text);
+        if (text === cachedText) writeUrl(push); // cache was already current: nothing to repaint
+        else paint(res, true);
       } catch (err) {
         if (id !== reqId) return;
+        if (cachedText) return;                 // offline / slow: keep showing the cached list
         shown = '';
         const msg = `<p class="empty">Could not load games: ${esc(err.message)}</p>`;
         if (v === 'today') $('#today').innerHTML = msg;
@@ -488,7 +552,7 @@
       e.preventDefault();
       const tab = a.dataset.tab;
       const again = tab === activeTab() && !state.cat && state.page === 1;
-      Object.assign(state, { cat: '', source: '', page: 1, search: tab === 'search', type: tab === 'game' || tab === 'app' ? tab : '' });
+      Object.assign(state, { cat: '', source: '', page: 1, installed: tab === 'installed', search: tab === 'search', type: tab === 'game' || tab === 'app' ? tab : '' });
       if (tab !== 'search' || !again) { state.q = ''; $('#q').value = ''; }
       window.scrollTo({ top: 0 });
       if (tab === 'search') $('#q').focus();

@@ -34,7 +34,18 @@ struct WebContainer: UIViewRepresentable {
         // Look like Safari so Google sign-in doesn't reject the embedded browser.
         config.applicationNameForUserAgent = "Version/17.0 Mobile/15E148 Safari/604.1 IPAGameApp"
 
+        // App feel: no text-selection / long-press callouts or grey tap flashes on buttons and cards.
+        let css = "*{-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}" +
+                  "body{-webkit-user-select:none;user-select:none}input,textarea{-webkit-user-select:text;user-select:text}"
+        let js = "var s=document.createElement('style');s.textContent='\(css)';(document.head||document.documentElement).appendChild(s);"
+        config.userContentController.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+
         let web = WKWebView(frame: .zero, configuration: config)
+        web.allowsLinkPreview = false
+        web.scrollView.pinchGestureRecognizer?.isEnabled = false
+        web.scrollView.decelerationRate = .normal
+        let bg = UIColor { $0.userInterfaceStyle == .dark ? UIColor.black : UIColor(red: 0.957, green: 0.961, blue: 0.969, alpha: 1) }
+        web.underPageBackgroundColor = bg
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
@@ -81,6 +92,11 @@ struct WebContainer: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { endRefresh() }
+
+        // iOS can kill the web process in the background: reload instead of showing a blank screen.
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            if webView.url == nil { webView.load(URLRequest(url: siteURL)) } else { webView.reload() }
+        }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { endRefresh() }
 

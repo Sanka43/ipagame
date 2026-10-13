@@ -2,59 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Installed · Game Store</title>
-  <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
-  <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css?v=20261013a">
+  <script>location.replace('./?installed=1');</script>
 </head>
-<body data-auth="required">
-  <main class="wrap">
-    <h1 class="page-title">Installed</h1>
-    <div class="list" id="list"></div>
-  </main>
-
-  <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
-
-  <script src="assets/common.js?v=20261013a"></script>
-  <script>
-    const list = document.getElementById('list');
-    document.getElementById('tabbar').innerHTML = tabBarHTML('installed');
-    mountAccountButton();
-
-    function render() {
-      const items = installedList();
-      if (!items.length) {
-        list.innerHTML = `<p class="empty">${IN_APP
-          ? 'No games installed yet.<br>Download a game and it will show up here with a Play button.'
-          : 'Installed games are shown in the IPA Game app on your iPhone.'}</p>`;
-        return;
-      }
-      list.innerHTML = items.map(it => `<div class="app-card">
-          <a href="game.html?slug=${encodeURIComponent(it.slug)}" style="display:contents">
-            ${iconHTML(it)}
-            <div class="row-info">
-              <div class="card-name">${esc(it.name)}</div>
-              <div class="card-ver">${it.version ? 'v' + esc(String(it.version).replace(/^v/i, '')) : ''}</div>
-              <div class="card-sub"><button type="button" class="link-btn" data-remove="${esc(it.slug)}">Remove from list</button></div>
-            </div>
-          </a>
-          <a class="get" href="#" data-play="${esc(it.slug)}" data-ver="${esc(it.version)}">Play</a>
-        </div>`).join('');
-    }
-
-    list.addEventListener('click', e => {
-      const rm = e.target.closest('[data-remove]');
-      if (rm) { e.preventDefault(); e.stopPropagation(); installedRemove(rm.dataset.remove); render(); return; }
-      const p = e.target.closest('[data-play]');
-      if (p) { e.preventDefault(); playInstalled(p.dataset.play, p.dataset.ver); }
-    });
-
-    render();
-  </script>
-</body>
+<body></body>
 </html>
