@@ -737,6 +737,58 @@ function str_in(array $in, string $key, int $max): string
 }
 
 // Only http(s) links or local uploads/ paths — never javascript: etc.
+/** Read a byte range from a local path or http(s) URL; returns [bytes, totalSize] or null. */
+function ipa_range(string $src, int $start, int $len, bool $fromEnd = false): ?array
+{
+    if (!preg_match('#^https?://#i', $src)) {
+        $p = __DIR__ . '/' . ltrim($src, '/');
+        if (!is_file($p)) return null;
+        $total = filesize($p);
+        if ($fromEnd) { $start = max(0, $total - $len); }
+        $h = fopen($p, 'rb');
+        fseek($h, $start);
+        $b = fread($h, $len);
+        fclose($h);
+        return [$b, $total];
+    }
+    $range = $fromEnd ? "-$len" : $start . '-' . ($start + $len - 1);
+    $ctx = stream_context_create(['http' => ['header' => "Range: bytes=$range\r\nUser-Agent: Mozilla/5.0\r\n", 'timeout' => 10]]);
+    $b = @file_get_contents($src, false, $ctx);
+    if ($b === false) return null;
+    $total = null;
+    foreach ($http_response_header ?? [] as $h) {
+        if (preg_match('#^Content-Range:\s*bytes\s+\d+-\d+/(\d+)#i', $h, $m)) $total = (int)$m[1];
+    }
+    return $total === null ? null : [$b, $total];
+}
+
+/** "Game.app" folder name inside an IPA's Payload/ (LiveContainer's bundle-name), read from the zip directory only. */
+function ipa_app_name(string $src): ?string
+{
+    $tail = ipa_range($src, 0, 65536, true);
+    if (!$tail) return null;
+    [$b, $total] = $tail;
+    $e = strrpos($b, "PK\x05\x06");
+    if ($e === false) return null;
+    $eocd = unpack('vdisk/vcdDisk/vnDisk/vnTotal/VcdSize/VcdOff', substr($b, $e + 4, 16));
+    if (!$eocd || $eocd['cdOff'] === 0xFFFFFFFF) return null;      // zip64: not supported
+    $tailStart = $total - strlen($b);
+    if ($eocd['cdOff'] >= $tailStart) {
+        $cd = substr($b, $eocd['cdOff'] - $tailStart, $eocd['cdSize']);
+    } else {
+        $r = ipa_range($src, $eocd['cdOff'], min($eocd['cdSize'], 4 * 1024 * 1024));
+        if (!$r) return null;
+        $cd = $r[0];
+    }
+    for ($o = 0; $o + 46 <= strlen($cd) && substr($cd, $o, 4) === "PK\x01\x02"; ) {
+        $h = unpack('vn/vm/vk', substr($cd, $o + 28, 6));
+        $name = substr($cd, $o + 46, $h['n']);
+        if (preg_match('#^Payload/([^/]+\.app)/#', $name, $m)) return $m[1];
+        $o += 46 + $h['n'] + $h['m'] + $h['k'];
+    }
+    return null;
+}
+
 function clean_url(string $u, string $field): string
 {
     if ($u === '') return '';
@@ -1671,6 +1723,21 @@ try {
             respond(['ok' => true]);
 
         /* ---------- Downloads ---------- */
+        // The .app folder name of a published game's IPA, so the app can launch it in LiveContainer. Cached per URL.
+        case 'ipa_app_name':
+            $item = find_item(null, (string)($_GET['slug'] ?? ''));
+            if (!$item || !is_published($item)) throw new ApiError('Not found', 404);
+            $url = '';
+            foreach ($item['versions'] as $v) {
+                if ((string)$v['version'] === (string)($_GET['version'] ?? '')) { $url = $v['download_url']; break; }
+            }
+            if ($url === '' || str_contains($url, 'apps.apple.com')) respond(['name' => null]);
+            $cache = sys_get_temp_dir() . '/ipa_name_' . md5($url) . '.txt';
+            if (is_file($cache)) respond(['name' => (trim((string)file_get_contents($cache)) ?: null)]);
+            $name = ipa_app_name($url);
+            if ($name !== null) @file_put_contents($cache, $name);
+            respond(['name' => $name]);
+
         // A signed-in member tapped Download on a game page. Guests aren't recorded.
         case 'track_download':
             require_post();

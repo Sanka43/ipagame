@@ -32,7 +32,7 @@ struct WebContainer: UIViewRepresentable {
         config.websiteDataStore = .default()              // cookies persist, so sign-in is remembered
         config.allowsInlineMediaPlayback = true
         // Look like Safari so Google sign-in doesn't reject the embedded browser.
-        config.applicationNameForUserAgent = "Version/17.0 Mobile/15E148 Safari/604.1"
+        config.applicationNameForUserAgent = "Version/17.0 Mobile/15E148 Safari/604.1 IPAGameApp"
 
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator

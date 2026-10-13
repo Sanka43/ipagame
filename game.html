@@ -42,7 +42,18 @@
 
     const dlIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>';
 
+    // Inside the iOS app a tapped IPA download is handed to LiveContainer (installs by itself), so the button becomes Play.
+    const inApp = /IPAGameApp/.test(navigator.userAgent);
+    const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"/></svg>';
+    const instKey = 'ipa-installed:' + slug;
+    const isInstalled = () => { try { return localStorage.getItem(instKey) === '1'; } catch { return false; } };
+    const setInstalled = on => { try { on ? localStorage.setItem(instKey, '1') : localStorage.removeItem(instKey); } catch {} };
+    const isIpa = v => !String(v.download_url).includes('apps.apple.com');
+
     function dlLink(v, label, cls = 'btn') {
+      if (inApp && isInstalled() && isIpa(v)) {
+        return `<a class="${cls}" href="#" data-play="${esc(v.version)}">${playIcon}Play</a>`;
+      }
       return `<a class="${cls}" href="${esc(asset(v.download_url))}" rel="nofollow noopener" target="_blank" data-dl="${esc(v.version)}">${dlIcon}${esc(label)}</a>`;
     }
 
@@ -84,7 +95,9 @@
 
     const chevDown = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
+    let current = null;
     function render(it) {
+      current = it;
       document.title = it.seo?.title || it.name;
       document.getElementById('tabbar').innerHTML = tabBarHTML(it.type || 'game');
       const latest = it.versions?.[0];
@@ -114,6 +127,7 @@
             <h1>${esc(it.name)}</h1>
             <div class="dev">${esc(it.developer || catLabel(it.category))}</div>
             ${latest ? dlLink(latest, 'Download') : ''}
+            ${inApp && latest && isInstalled() && isIpa(latest) ? '<a class="how-install" href="#" data-redownload>Download again</a>' : ''}
             ${latest && !latest.download_url.includes('apps.apple.com') ? `<a class="how-install" href="install.html?from=${encodeURIComponent(it.slug)}">How to install IPA</a>` : ''}
           </div>
         </div>
@@ -191,8 +205,25 @@
 
     // Record the tap for the admin's Downloads tab (signed-in members only; the server ignores guests).
     el.addEventListener('click', e => {
+      const play = e.target.closest('[data-play]');
+      if (play) {
+        e.preventDefault();
+        api('ipa_app_name', { params: { slug, version: play.dataset.play } })
+          .then(r => { location.href = 'livecontainer://livecontainer-launch' + (r.name ? '?bundle-name=' + encodeURIComponent(r.name) : ''); })
+          .catch(() => { location.href = 'livecontainer://'; });
+        return;
+      }
+      const again = e.target.closest('[data-redownload]');
+      if (again) { e.preventDefault(); setInstalled(false); render(current); return; }
+
       const a = e.target.closest('[data-dl]');
-      if (a) api('track_download', { body: { slug, version: a.dataset.dl } }).catch(() => {});
+      if (!a) return;
+      api('track_download', { body: { slug, version: a.dataset.dl } }).catch(() => {});
+      if (inApp && !a.href.includes('apps.apple.com')) {
+        setInstalled(true);
+        // Let the tap hand off to LiveContainer first, then swap Download for Play.
+        setTimeout(() => { if (current) render(current); }, 800);
+      }
     });
 
     if (!slug) {
