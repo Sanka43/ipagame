@@ -768,7 +768,27 @@ function ipa_range(string $src, int $start, int $len, bool $fromEnd = false): ?a
         return [$b, $total];
     }
     $range = $fromEnd ? "-$len" : $start . '-' . ($start + $len - 1);
-    $ctx = stream_context_create(['http' => ['header' => "Range: bytes=$range\r\nUser-Agent: Mozilla/5.0\r\n", 'timeout' => 10]]);
+    $ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+    $origin = (parse_url($src, PHP_URL_SCHEME) ?: 'https') . '://' . parse_url($src, PHP_URL_HOST) . '/';
+    if (function_exists('curl_init')) {
+        $ch = curl_init($src);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_RANGE => $range, CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5, CURLOPT_TIMEOUT => 20, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_USERAGENT => $ua, CURLOPT_REFERER => $origin,
+        ]);
+        $raw = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $hsize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+        if (!is_string($raw) || $code !== 206) return null;      // 200 = the host ignored Range (would be the whole file)
+        $head = substr($raw, 0, $hsize);
+        $b = substr($raw, $hsize);
+        return preg_match('#Content-Range:\s*bytes\s+\d+-\d+/(\d+)#i', $head, $m) ? [$b, (int)$m[1]] : null;
+    }
+    $ctx = stream_context_create(['http' => ['header' => "Range: bytes=$range
+Referer: $origin
+User-Agent: $ua
+", 'timeout' => 20]]);
     $b = @file_get_contents($src, false, $ctx);
     if ($b === false) return null;
     $total = null;

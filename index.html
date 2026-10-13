@@ -43,7 +43,7 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20261013b"></script>
+  <script src="assets/common.js?v=20261013c"></script>
   <script>
     const $ = s => document.querySelector(s);
     const PER_PAGE = 24;
@@ -339,6 +339,7 @@
     // Installed tab (iOS app): games downloaded on this device, each with a Play button (runs in LiveContainer).
     function renderInstalled() {
       const items = installedList();
+      if (items.some(x => !x.bundle)) backfillBundles();
       $('#installedList').innerHTML = items.length
         ? items.map(it => `<div class="app-card">
             <a href="game.html?slug=${encodeURIComponent(it.slug)}" style="display:contents">
@@ -354,6 +355,11 @@
         : `<p class="empty">${IN_APP
             ? 'No games installed yet.<br>Download a game and it will show up here with a Play button.'
             : 'Installed games are shown in the IPA Game app on your iPhone.'}</p>`;
+    }
+
+    // Games saved before their .app name was known: look the names up now (the app is in the foreground).
+    function backfillBundles() {
+      installedList().filter(x => !x.bundle).forEach(x => fetchBundleName(x.slug, x.version).then(n => { if (n) installedSetBundle(x.slug, n); }));
     }
 
     $('#installedList').addEventListener('click', e => {

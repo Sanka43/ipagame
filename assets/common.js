@@ -142,19 +142,35 @@ function installedList() {
   try { const l = JSON.parse(localStorage.getItem(INST_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch { return []; }
 }
 function installedHas(slug) { return installedList().some(x => x.slug === slug); }
-function installedAdd(it, version) {
+function installedAdd(it, version, bundle) {
+  const old = installedList().find(x => x.slug === it.slug);
   const l = installedList().filter(x => x.slug !== it.slug);
-  l.unshift({ slug: it.slug, name: it.name, icon: it.icon || '', version: String(version || it.latest_version || ''), t: Date.now() });
+  const ver = String(version || it.latest_version || '');
+  // Keep a known .app name when the same version is downloaded again.
+  l.unshift({ slug: it.slug, name: it.name, icon: it.icon || '', version: ver, bundle: bundle || (old && old.version === ver ? old.bundle : '') || '', t: Date.now() });
   try { localStorage.setItem(INST_KEY, JSON.stringify(l)); } catch {}
+}
+function installedSetBundle(slug, bundle) {
+  try { localStorage.setItem(INST_KEY, JSON.stringify(installedList().map(x => x.slug === slug ? { ...x, bundle } : x))); } catch {}
+}
+// The .app folder name LiveContainer knows the game by (read from the IPA by the server).
+function fetchBundleName(slug, version) {
+  return api('ipa_app_name', { params: { slug, version } }).then(r => r.name || '').catch(() => '');
 }
 function installedRemove(slug) {
   try { localStorage.setItem(INST_KEY, JSON.stringify(installedList().filter(x => x.slug !== slug))); } catch {}
 }
 // Launch the game in LiveContainer (its .app folder name is read from the IPA by the server).
-function playInstalled(slug, version) {
-  return api('ipa_app_name', { params: { slug, version } })
-    .then(r => { location.href = 'livecontainer://livecontainer-launch' + (r.name ? '?bundle-name=' + encodeURIComponent(r.name) : ''); })
-    .catch(() => { location.href = 'livecontainer://'; });
+async function playInstalled(slug, version) {
+  const entry = installedList().find(x => x.slug === slug);
+  let name = entry && entry.bundle;
+  if (!name) {
+    name = await fetchBundleName(slug, version);
+    if (name) installedSetBundle(slug, name);
+  }
+  if (name) { location.href = 'livecontainer://livecontainer-launch?bundle-name=' + encodeURIComponent(name); return; }
+  alert('Could not find this game inside LiveContainer automatically. LiveContainer will open: tap the game there to play.');
+  location.href = 'livecontainer://';
 }
 
 function tabBarHTML(active = '') {
