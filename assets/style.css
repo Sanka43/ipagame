@@ -1029,3 +1029,9 @@ main.wrap { position: relative; display: flow-root; }   /* flow-root: title marg
   .checks { gap: 12px; flex-direction: column; align-items: flex-start; }
   .sp { height: calc(100dvh - 130px); border-radius: 12px; }
 }
+
+/* "Continue with Google" in the iOS app (native sheet; same look as Google's black pill button) */
+.gbtn-app { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 400px; height: 44px;
+  border: 1px solid #5f6368; border-radius: 999px; background: #131314; color: #e3e3e3; font: 500 15px/1 system-ui, -apple-system, sans-serif; }
+.gbtn-app:active { background: #2a2a2c; }
+.gbtn-app:disabled { opacity: .6; }

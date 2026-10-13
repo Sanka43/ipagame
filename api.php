@@ -1488,7 +1488,16 @@ try {
         // "Continue with Google": signs in the account with this Google ID or email, or creates one.
         case 'google_login':
             require_post();
-            $c = google_claims((string)(body()['credential'] ?? ''));
+            $nonce = (string)(body()['nonce'] ?? '');
+            // iOS app flow: the token was minted for this app session (nonce) and must be fresh.
+            $cred = (string)(body()['credential'] ?? '');
+            $c = google_claims($cred, $nonce !== '' ? 600 : 0);
+            // Google has verified the signature; read the nonce from the payload if tokeninfo doesn't echo it.
+            $tokenNonce = (string)($c['nonce'] ?? (json_decode((string)base64_decode(strtr(explode('.', $cred)[1] ?? '', '-_', '+/')), true)['nonce'] ?? ''));
+            if ($nonce !== '' && !hash_equals($tokenNonce, $nonce)) {
+                rate_hit('login:' . client_ip());
+                throw new ApiError('Google sign-in failed. Try again.', 401);
+            }
             $email = mb_strtolower(trim((string)$c['email']));
             $picture = preg_match('~^https://[\w.-]+\.googleusercontent\.com/~', (string)($c['picture'] ?? '')) ? (string)$c['picture'] : '';
             $st = db()->prepare('SELECT * FROM users WHERE google_sub=? OR email=? ORDER BY google_sub=? DESC LIMIT 1');
@@ -1801,6 +1810,45 @@ try {
             respond(['ok' => true]);
 
         // The link in every email. GET shows a confirm button; the POST (button or mail-client one-click) unsubscribes.
+        // Google sign-in for the iOS app. The app opens this URL in a system browser sheet (ASWebAuthenticationSession),
+        // because Google refuses OAuth inside embedded web views. GET shows the Google button (redirect mode);
+        // Google then POSTs the ID token back here and we hand it to the app through ipagame://auth.
+        // Needs this exact URL under "Authorized redirect URIs" of the OAuth client.
+        case 'google_app':
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: no-store');
+            $page = fn(string $body) => '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+                . '<title>Sign in with Google</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;'
+                . 'font:16px -apple-system,system-ui,sans-serif;background:#0b0b10;color:#eee;text-align:center"><div style="padding:24px">' . $body . '</div>';
+            $selfUri = site_url() . '/api.php?action=google_app';
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                $cred = (string)($_POST['credential'] ?? '');
+                $csrf = (string)($_POST['g_csrf_token'] ?? '');
+                $cookie = (string)($_COOKIE['g_csrf_token'] ?? '');
+                if ($csrf === '' || !hash_equals($cookie, $csrf) || !preg_match('/^[\w-]+\.[\w-]+\.[\w-]+$/', $cred)) {
+                    http_response_code(400);
+                    echo $page('<h2>Sign-in failed</h2><p>Close this window and try again.</p>');
+                    exit;
+                }
+                $to = 'ipagame://auth?credential=' . $cred;
+                header('Location: ' . $to);
+                echo $page('<p>Returning to the app…</p><script>location.replace(' . json_encode($to) . ')</script>');
+                exit;
+            }
+            $nonce = (string)($_GET['nonce'] ?? '');
+            if (GOOGLE_CLIENT_ID === '' || !preg_match('/^[A-Za-z0-9]{16,64}$/', $nonce)) {
+                http_response_code(400);
+                echo $page('<h2>Google sign-in is not available</h2>');
+                exit;
+            }
+            echo $page('<h2 style="margin:0 0 18px">Continue to ' . htmlspecialchars(BRAND, ENT_QUOTES) . '</h2><div id="g" style="display:flex;justify-content:center;min-height:44px"></div>'
+                . '<script src="https://accounts.google.com/gsi/client" async></script><script>'
+                . 'window.onload=function(){google.accounts.id.initialize({client_id:' . json_encode(GOOGLE_CLIENT_ID)
+                . ',ux_mode:"redirect",login_uri:' . json_encode($selfUri) . ',nonce:' . json_encode($nonce) . ',context:"signin"});'
+                . 'google.accounts.id.renderButton(document.getElementById("g"),{theme:"filled_black",size:"large",shape:"pill",text:"continue_with",width:300,locale:"en"})}'
+                . '</script>');
+            exit;
+
         case 'unsubscribe':
             $uid = (int)($_GET['u'] ?? 0);
             $valid = $uid > 0 && hash_equals(unsub_token($uid), (string)($_GET['t'] ?? ''));

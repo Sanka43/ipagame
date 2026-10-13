@@ -40,6 +40,7 @@ return [
     // ],
     // "Continue with Google": OAuth client ID (Web application) from Google Cloud Console → APIs & Services →
     // Credentials. Authorized JavaScript origins: https://app.ipagame.store (and http://localhost:8099 for dev).
+    // The iOS app also needs Authorized redirect URIs: https://app.ipagame.store/api.php?action=google_app
     // Empty = the Google button is hidden.
     'google_client_id' => '',
     // Public URL of this site, e.g. 'https://app.ipagame.store'. Set it on the server: emails only

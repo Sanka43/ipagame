@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import AuthenticationServices
 
 /// The store is the website itself: this app is a full-screen window onto https://app.ipagame.store/,
 /// so the UI is identical to the site (and to the old Web Clip profile).
@@ -40,6 +41,9 @@ struct WebContainer: UIViewRepresentable {
         let js = "var s=document.createElement('style');s.textContent='\(css)';(document.head||document.documentElement).appendChild(s);"
         config.userContentController.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
+        // "Continue with Google": Google refuses OAuth inside web views, so the page asks us to open it in a system sheet.
+        config.userContentController.add(context.coordinator, name: "googleSignIn")
+
         let web = WKWebView(frame: .zero, configuration: config)
         web.allowsLinkPreview = false
         web.scrollView.pinchGestureRecognizer?.isEnabled = false
@@ -65,8 +69,54 @@ struct WebContainer: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, ASWebAuthenticationPresentationContextProviding {
         weak var web: WKWebView?
+        private var authSession: ASWebAuthenticationSession?
+
+        // ---- Google sign-in (system sheet) ----
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "googleSignIn",
+                  message.frameInfo.isMainFrame,
+                  let host = message.frameInfo.request.url?.host?.lowercased(),
+                  host == siteHost || host.hasSuffix(".ipagame.store"),
+                  let body = message.body as? [String: Any],
+                  let nonce = body["nonce"] as? String,
+                  nonce.range(of: "^[A-Za-z0-9]{16,64}$", options: .regularExpression) != nil else { return }
+            startGoogleSignIn(nonce: nonce)
+        }
+
+        private func startGoogleSignIn(nonce: String) {
+            var c = URLComponents(url: siteURL.appendingPathComponent("api.php"), resolvingAgainstBaseURL: false)!
+            c.queryItems = [URLQueryItem(name: "action", value: "google_app"), URLQueryItem(name: "nonce", value: nonce)]
+            let session = ASWebAuthenticationSession(url: c.url!, callbackURLScheme: "ipagame") { [weak self] url, error in
+                guard let self else { return }
+                self.authSession = nil
+                var cred: String?
+                if let url, let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
+                    cred = items.first(where: { $0.name == "credential" })?.value
+                }
+                if let cred, cred.range(of: "^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$", options: .regularExpression) != nil {
+                    self.web?.evaluateJavaScript("window.onNativeGoogle && window.onNativeGoogle('\(cred)')")
+                } else if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin {
+                    self.web?.evaluateJavaScript("window.onNativeGoogleCancel && window.onNativeGoogleCancel()")
+                } else {
+                    self.web?.evaluateJavaScript("window.onNativeGoogleError && window.onNativeGoogleError()")
+                }
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralSession = false      // reuse the Google account already signed in on this iPhone
+            authSession = session
+            if !session.start() {
+                authSession = nil
+                web?.evaluateJavaScript("window.onNativeGoogleError && window.onNativeGoogleError()")
+            }
+        }
+
+        func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+            UIApplication.shared.connectedScenes
+                .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+                .first ?? ASPresentationAnchor()
+        }
 
         @objc func reload(_ sender: UIRefreshControl) {
             if web?.url == nil { web?.load(URLRequest(url: siteURL)) } else { web?.reload() }
