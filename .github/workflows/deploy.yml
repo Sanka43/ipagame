@@ -56,6 +56,7 @@ jobs:
             **/.git*/**
             .github/**
             .claude/**
+            ios/**
             scripts/**
             config.example.php
             **/*.bak
