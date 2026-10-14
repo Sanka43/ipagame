@@ -15,9 +15,19 @@ declare(strict_types=1);
 return new class($cfg) implements Gateway, StatusLookup {
     public function __construct(private array $cfg)
     {
+        // Pasted keys often carry spaces, quotes or a "Bearer " prefix: clean them so Paddle accepts the header.
+        foreach (['api_key', 'client_token', 'price_id', 'webhook_secret'] as $k) {
+            $this->cfg[$k] = trim((string)preg_replace('/^\s*Bearer\s+/i', '', trim((string)($cfg[$k] ?? ''), " \t\r\n\"'")));
+        }
         // webhook_secret is only needed for webhooks (not on localhost, where pay_status asks Paddle instead).
         foreach (['api_key', 'client_token', 'price_id'] as $k) {
-            if (empty($cfg[$k])) throw new GatewayError('Paddle is not configured');
+            if ($this->cfg[$k] === '') throw new GatewayError('Paddle is not configured');
+        }
+        if (!preg_match('/^pdl_(sdbx_|live_)?apikey_\w+$/', $this->cfg['api_key'])) {
+            throw new GatewayError('Paddle api_key looks wrong: it must start with pdl_sdbx_apikey_ (sandbox) or pdl_live_apikey_ (live)');
+        }
+        if (!empty($this->cfg['sandbox']) !== str_contains($this->cfg['api_key'], '_sdbx_')) {
+            throw new GatewayError("Paddle: 'sandbox' and the api_key do not match (a sandbox key contains _sdbx_)");
         }
     }
 
