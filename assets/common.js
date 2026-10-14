@@ -186,12 +186,14 @@ function lcMissingPopup() {
   box.id = 'lcMissing';
   box.setAttribute('role', 'alertdialog');
   box.style.cssText = 'position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.55)';
-  box.innerHTML = `<div style="max-width:340px;width:100%;background:var(--surface);color:var(--text);border-radius:20px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
-      <div style="font-size:18px;font-weight:700;margin-bottom:8px">LiveContainer needed</div>
-      <p class="muted" style="margin:0 0 16px;font-size:14px">If LiveContainer did not open, it is probably not installed. Get it from
-        <strong style="color:var(--text)">livecontainer.site</strong>, install it, then tap again.</p>
-      <a class="btn block" href="https://livecontainer.site" target="_blank" rel="noopener">Get LiveContainer</a>
-      <button type="button" class="btn block ghost" style="margin-top:8px" data-close>Close</button>
+  box.innerHTML = `<div style="position:relative;max-width:340px;width:100%;background:var(--surface);color:var(--text);border-radius:22px;padding:30px 22px 26px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <button type="button" data-close aria-label="Close" style="position:absolute;top:12px;right:12px;width:32px;height:32px;border:0;border-radius:50%;background:var(--surface-2);color:var(--text);display:grid;place-items:center;cursor:pointer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#f5a524" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block;margin:0 auto 12px"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+      <div style="font-size:20px;font-weight:700;margin-bottom:10px">LiveContainer needed</div>
+      <p class="muted" style="margin:0;font-size:14.5px;line-height:1.55">If LiveContainer did not open, it is probably not installed. Get it from
+        <a href="https://livecontainer.site" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">livecontainer.site</a>, install it, then tap again.</p>
     </div>`;
   box.addEventListener('click', e => { if (e.target === box || e.target.closest('[data-close]')) box.remove(); });
   document.body.append(box);
