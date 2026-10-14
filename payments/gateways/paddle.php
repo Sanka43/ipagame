@@ -23,8 +23,12 @@ return new class($cfg) implements Gateway, StatusLookup {
         foreach (['api_key', 'client_token', 'price_id'] as $k) {
             if ($this->cfg[$k] === '') throw new GatewayError('Paddle is not configured');
         }
-        if (!preg_match('/^pdl_(sdbx_|live_)?apikey_\w+$/', $this->cfg['api_key'])) {
+        if (!preg_match('/^pdl_(sdbx|live)_apikey_/', $this->cfg['api_key'])) {
             throw new GatewayError('Paddle api_key looks wrong: it must start with pdl_sdbx_apikey_ (sandbox) or pdl_live_apikey_ (live)');
+        }
+        // A full key is pdl_<env>_apikey_<id>_<secret>...; Paddle shows it once and a cut-off copy is a common mistake.
+        if (!preg_match('/^pdl_(sdbx|live)_apikey_[^_]+_\S{8,}$/', $this->cfg['api_key'])) {
+            throw new GatewayError('Paddle api_key looks cut off: copy the whole key (create a new one if you cannot see it again)');
         }
         if (!empty($this->cfg['sandbox']) !== str_contains($this->cfg['api_key'], '_sdbx_')) {
             throw new GatewayError("Paddle: 'sandbox' and the api_key do not match (a sandbox key contains _sdbx_)");
