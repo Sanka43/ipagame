@@ -874,8 +874,8 @@ function ipa_range(string $src, int $start, int $len, bool $fromEnd = false): ?a
     return ipa_http_range($src, $from . '-' . ($total - 1));
 }
 
-/** "Game.app" folder name inside an IPA's Payload/ (LiveContainer's bundle-name), read from the zip directory only. */
-function ipa_app_name(string $src): ?string
+/** The zip's central directory (list of entries) of an IPA, read from its end only. Returns the raw bytes, or null. */
+function ipa_central_dir(string $src): ?string
 {
     $tail = ipa_range($src, 0, 65536, true);
     if (!$tail) return null;
@@ -885,20 +885,99 @@ function ipa_app_name(string $src): ?string
     $eocd = unpack('vdisk/vcdDisk/vnDisk/vnTotal/VcdSize/VcdOff', substr($b, $e + 4, 16));
     if (!$eocd || $eocd['cdOff'] === 0xFFFFFFFF) return null;      // zip64: not supported
     $tailStart = $total - strlen($b);
-    if ($eocd['cdOff'] >= $tailStart) {
-        $cd = substr($b, $eocd['cdOff'] - $tailStart, $eocd['cdSize']);
-    } else {
-        $r = ipa_range($src, $eocd['cdOff'], min($eocd['cdSize'], 4 * 1024 * 1024));
-        if (!$r) return null;
-        $cd = $r[0];
-    }
+    if ($eocd['cdOff'] >= $tailStart) return substr($b, $eocd['cdOff'] - $tailStart, $eocd['cdSize']);
+    $r = ipa_range($src, $eocd['cdOff'], min($eocd['cdSize'], 4 * 1024 * 1024));
+    return $r ? $r[0] : null;
+}
+
+/** Entries of a central directory as [name, method, csize, local header offset]. */
+function ipa_zip_entries(string $cd): iterable
+{
     for ($o = 0; $o + 46 <= strlen($cd) && substr($cd, $o, 4) === "PK\x01\x02"; ) {
         $h = unpack('vn/vm/vk', substr($cd, $o + 28, 6));
-        $name = substr($cd, $o + 46, $h['n']);
-        if (preg_match('#^Payload/([^/]+\.app)/#', $name, $m)) return $m[1];
+        $f = unpack('vmethod/x4/Vcrc/Vcsize/Vusize', substr($cd, $o + 10, 20));
+        $off = unpack('Voff', substr($cd, $o + 42, 4))['off'];
+        yield [substr($cd, $o + 46, $h['n']), $f['method'], $f['csize'], $off];
         $o += 46 + $h['n'] + $h['m'] + $h['k'];
     }
+}
+
+/** "Game.app" folder name inside an IPA's Payload/, read from the zip directory only. */
+function ipa_app_name(string $src): ?string
+{
+    $cd = ipa_central_dir($src);
+    if ($cd === null) return null;
+    foreach (ipa_zip_entries($cd) as [$name]) {
+        if (preg_match('#^Payload/([^/]+\.app)/#', $name, $m)) return $m[1];
+    }
     return null;
+}
+
+/** CFBundleIdentifier from an IPA's Payload/<name>.app/Info.plist (only that one file is downloaded). */
+function ipa_bundle_id(string $src): ?string
+{
+    $cd = ipa_central_dir($src);
+    if ($cd === null) return null;
+    foreach (ipa_zip_entries($cd) as [$name, $method, $csize, $off]) {
+        if (!preg_match('#^Payload/[^/]+\.app/Info\.plist$#', $name) || $csize > 1048576) continue;
+        $lh = ipa_range($src, $off, 30);
+        if (!$lh || substr($lh[0], 0, 4) !== "PK\x03\x04") return null;
+        $l = unpack('vn/vm', substr($lh[0], 26, 4));
+        $data = ipa_range($src, $off + 30 + $l['n'] + $l['m'], $csize);
+        if (!$data) return null;
+        $plist = $method === 8 ? @gzinflate($data[0]) : ($method === 0 ? $data[0] : false);
+        return $plist === false ? null : plist_string($plist, 'CFBundleIdentifier');
+    }
+    return null;
+}
+
+/** One top-level string value of an Info.plist (XML or binary). */
+function plist_string(string $plist, string $key): ?string
+{
+    if (!str_starts_with($plist, 'bplist00')) {
+        $x = @simplexml_load_string($plist);
+        if (!$x || !isset($x->dict)) return null;
+        $k = $x->dict->children();
+        for ($i = 0, $n = count($k); $i < $n - 1; $i++) {
+            if ($k[$i]->getName() === 'key' && (string)$k[$i] === $key) return $k[$i + 1]->getName() === 'string' ? (string)$k[$i + 1] : null;
+        }
+        return null;
+    }
+    // Binary plist: trailer = offset size, ref size, object count, top object, offset table position.
+    $t = unpack('CoffSize/CrefSize/Jcount/Jtop/JtableOff', substr($plist, -26, 26));
+    $num = fn(int $pos, int $len) => hexdec(bin2hex(substr($plist, $pos, $len)));
+    $objPos = fn(int $i) => $num($t['tableOff'] + $i * $t['offSize'], $t['offSize']);
+    // Marker nibble + length (a 0xF nibble means the real count follows as an int object).
+    $head = function (int $pos) use ($plist, $num): array {
+        $m = ord($plist[$pos]);
+        $len = $m & 0x0F;
+        $pos++;
+        if ($len === 0x0F) {
+            $size = 1 << (ord($plist[$pos]) & 0x0F);
+            $len = $num($pos + 1, $size);
+            $pos += 1 + $size;
+        }
+        return [$m >> 4, $len, $pos];
+    };
+    $str = function (int $i) use ($plist, $objPos, $head): ?string {
+        [$type, $len, $p] = $head($objPos($i));
+        if ($type === 0x5) return substr($plist, $p, $len);                                   // ASCII
+        if ($type === 0x6) return mb_convert_encoding(substr($plist, $p, $len * 2), 'UTF-8', 'UTF-16BE');
+        return null;
+    };
+    [$type, $count, $p] = $head($objPos($t['top']));
+    if ($type !== 0xD) return null;                                                           // dict: keys then values
+    for ($i = 0; $i < $count; $i++) {
+        if ($str($num($p + $i * $t['refSize'], $t['refSize'])) === $key) return $str($num($p + ($count + $i) * $t['refSize'], $t['refSize']));
+    }
+    return null;
+}
+
+/** The folder name LiveContainer gives an installed IPA: "<bundle identifier>.app" (it names apps by identifier). */
+function ipa_lc_folder(string $src): ?string
+{
+    $id = ipa_bundle_id($src);
+    return $id !== null && preg_match('/^[A-Za-z0-9.\-_]+$/', $id) ? "$id.app" : null;
 }
 
 function clean_url(string $u, string $field): string
@@ -1907,9 +1986,9 @@ try {
                 if ((string)$v['version'] === (string)($_GET['version'] ?? '')) { $url = $v['download_url']; break; }
             }
             if ($url === '' || str_contains($url, 'apps.apple.com')) respond(['name' => null]);
-            $cache = sys_get_temp_dir() . '/ipa_name_' . md5($url) . '.txt';
+            $cache = sys_get_temp_dir() . '/ipa_lc_' . md5($url) . '.txt';
             if (is_file($cache)) respond(['name' => (trim((string)file_get_contents($cache)) ?: null)]);
-            $name = ipa_app_name($url);
+            $name = ipa_lc_folder($url);
             if ($name !== null) @file_put_contents($cache, $name);
             respond(['name' => $name]);
 
