@@ -43,7 +43,7 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 
-  <script src="assets/common.js?v=20261014c"></script>
+  <script src="assets/common.js?v=20261014d"></script>
   <script>
     const $ = s => document.querySelector(s);
     const PER_PAGE = 24;
@@ -336,7 +336,7 @@
     const view = () => state.installed ? 'installed' : state.search ? 'search' : state.cat ? 'list' : state.type ? 'shelves' : 'today';
     const activeTab = () => state.installed ? 'installed' : state.search ? 'search' : state.type || 'home';
 
-    // Installed tab (iOS app): games downloaded on this device, each with a Play button (runs in LiveContainer).
+    // Play tab (iPhone / iPad): games downloaded on this device, each with a Play button (runs in LiveContainer).
     function renderInstalled() {
       const items = installedList();
       if (items.some(x => !x.bundle)) backfillBundles();
@@ -352,9 +352,9 @@
             </a>
             <a class="get" href="#" data-play="${esc(it.slug)}" data-ver="${esc(it.version)}">Play</a>
           </div>`).join('')
-        : `<p class="empty">${IN_APP
-            ? 'No games installed yet.<br>Download a game and it will show up here with a Play button.'
-            : 'Installed games are shown in the IPA Game app on your iPhone.'}</p>`;
+        : `<p class="empty">${IN_APP || ON_IOS
+            ? 'No games yet.<br>Download a game and it will show up here with a Play button.'
+            : 'Downloaded games are shown on your iPhone or iPad.'}</p>`;
     }
 
     // Games saved before their .app name was known: look the names up now (the app is in the foreground).
@@ -391,7 +391,7 @@
       $('#shelves').hidden = v === 'installed';
       $('#clearCat').hidden = !(v === 'search' && state.cat);
       $('#installedSec').hidden = v !== 'installed';
-      const title = v === 'search' ? 'Search' : v === 'shelves' ? TYPE_LABELS[state.type] : v === 'installed' ? 'Installed' : '';
+      const title = v === 'search' ? 'Search' : v === 'shelves' ? TYPE_LABELS[state.type] : v === 'installed' ? 'Play' : '';
       $('#pageTitle').textContent = title || '';
       $('#pageTitle').hidden = !title;
       // All / App Store / IPA switch on the Games tab (shelves and category lists).
