@@ -48,6 +48,7 @@
 
     // Inside the iOS app a tapped IPA download is handed to LiveContainer (installs by itself), so the button becomes Play.
     const inApp = IN_APP;
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"/></svg>';
     const isInstalled = () => installedHas(slug);
     const isIpa = v => !String(v.download_url).includes('apps.apple.com');
@@ -233,6 +234,13 @@
       const a = e.target.closest('[data-dl]');
       if (!a) return;
       api('track_download', { body: { slug, version: a.dataset.dl } }).catch(() => {});
+      // On an iPhone/iPad outside the app (home-screen icon, Safari) an .ipa link would open Safari and download a
+      // file nothing can install: hand it to LiveContainer instead, like the iOS app does.
+      if (!inApp && isIOS && /\.ipa$/i.test(new URL(a.href).pathname)) {
+        e.preventDefault();
+        location.href = 'livecontainer://install?url=' + encodeURIComponent(a.href);
+        return;
+      }
       if (inApp && !a.href.includes('apps.apple.com')) {
         if (current) installedAdd(current, a.dataset.dl, bundleNames[a.dataset.dl]);
         // Let the tap hand off to LiveContainer first, then swap Download for Play.
