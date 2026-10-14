@@ -123,6 +123,8 @@
           <option value="published">Published</option>
           <option value="draft">Drafts</option>
           <option value="scheduled">Scheduled</option>
+          <option value="free">Free</option>
+          <option value="premium">Premium</option>
           <option value="nolink">No download link</option>
         </select>
         <select class="input u-filter" id="gSource" aria-label="Filter by download source">
@@ -172,6 +174,7 @@
             <option value="verified">Verified</option>
             <option value="unverified">Unverified</option>
             <option value="disabled">Disabled</option>
+            <option value="vip">VIP members</option>
             <option value="new">New (7 days)</option>
           </select>
         </div>
@@ -387,9 +390,12 @@
               <option value="removed">Removed (hidden)</option>
             </select>
           </div>
-          <div class="field" id="publishAtField" style="display:none">
-            <label class="label" for="f-publish-at">Publish at (Sri Lanka time)</label>
-            <input class="input" id="f-publish-at" name="publish_at" type="datetime-local">
+          <div class="field">
+            <label class="label" for="f-access">Access</label>
+            <select class="input" id="f-access" name="access">
+              <option value="free">Free</option>
+              <option value="premium">Premium (paid)</option>
+            </select>
           </div>
         </div>
         <div class="checks">
@@ -473,6 +479,7 @@
         <div class="card u-facts" id="uFacts"></div>
         <div class="checks" style="margin-top:14px">
           <label class="check"><input type="checkbox" name="verified"> Email verified</label>
+          <label class="check"><input type="checkbox" name="vip"> VIP member <span class="muted" style="font-size:13px">(can download premium games)</span></label>
           <label class="check"><input type="checkbox" name="disabled"> Account disabled <span class="muted" style="font-size:13px">(can&#39;t sign in)</span></label>
         </div>
       </div>
@@ -609,6 +616,8 @@
       draft: i => i.status === 'draft' && !i.publish_at,
       scheduled: isScheduled,
       nolink: i => !i.download_url,
+      free: i => i.access !== 'premium',
+      premium: i => i.access === 'premium',
     };
 
     function render() {
@@ -617,6 +626,7 @@
         ['Total', items.length],
         ['Games', count(i => i.type === 'game')],
         ['Apps', count(i => i.type === 'app')],
+        ['Premium', count(i => i.access === 'premium')],
         ['Drafts', count(i => i.status === 'draft' && !i.publish_at)],
         ['Scheduled', count(isScheduled)],
       ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
@@ -636,11 +646,12 @@
         return `<div class="row">
           ${iconHTML(it, 'sm')}
           <div class="row-info">
-            <div class="row-name">${esc(it.name)} ${isScheduled(it) ? `<span class="badge draft">Scheduled · ${esc(new Date(it.publish_at).toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'medium', timeStyle: 'short' }))} (SL time)</span>` : it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''}</div>
+            <div class="row-name">${esc(it.name)} ${isScheduled(it) ? `<span class="badge draft">Scheduled · ${esc(new Date(it.publish_at).toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'medium', timeStyle: 'short' }))} (SL time)</span>` : it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''} ${it.access === 'premium' ? '<span class="badge">Premium</span>' : ''}</div>
             <div class="row-sub">${esc(meta)}</div>
             ${dl ? `<a class="row-link" href="${esc(asset(dl))}" target="_blank" rel="noopener" title="${esc(dl)}">${esc(dl.replace(/^https?:\/\//i, ''))}</a>` : '<div class="row-sub">No download link</div>'}
           </div>
           <div class="row-actions">
+            <button class="btn sm ghost" data-access="${it.id}" title="Switch between free and premium">${it.access === 'premium' ? 'Make free' : 'Make premium'}</button>
             <button class="btn sm ghost" data-edit="${it.id}">Edit</button>
             <button class="btn sm danger" data-del="${it.id}">Delete</button>
           </div>
@@ -656,6 +667,18 @@
     $('#list').addEventListener('click', async e => {
       const edit = e.target.closest('[data-edit]');
       const del = e.target.closest('[data-del]');
+      const acc = e.target.closest('[data-access]');
+      if (acc) {
+        const it = items.find(i => String(i.id) === acc.dataset.access);
+        const to = it.access === 'premium' ? 'free' : 'premium';
+        acc.disabled = true;
+        try {
+          await api('admin_set_access', { body: { id: it.id, access: to } });
+          it.access = to;
+          toast(`${it.name} is now ${to}`);
+          render();
+        } catch (err) { handleError(err); acc.disabled = false; }
+      }
       if (edit) {
         // The list only has summary rows; load the whole game (versions, description) to edit it.
         edit.disabled = true;
@@ -828,6 +851,7 @@
       f.short_description.value = it?.short_description ?? '';
       f.description.value = it?.description ?? '';
       f.status.value = isScheduled(it) ? 'scheduled' : it?.status ?? 'published';
+      f.access.value = it?.access ?? 'free';
       f.publish_at.value = isScheduled(it) ? toLocalInput(it.publish_at) : '';
       syncPublishAt();
       f.popular.checked = !!it?.featured?.popular;
@@ -859,6 +883,7 @@
         short_description: f.short_description.value,
         description: f.description.value,
         status: f.status.value,
+        access: f.access.value,
         publish_at: f.status.value === 'scheduled' && f.publish_at.value ? fromLocalInput(f.publish_at.value) : '',
         popular: f.popular.checked,
         editors_choice: f.editors_choice.checked,
@@ -1228,6 +1253,7 @@
     const FILTERS = {
       '': () => true,
       verified: u => u.verified_at,
+      vip: u => u.vip,
       unverified: u => !u.verified_at,
       disabled: u => u.disabled_at,
       new: isNew,
@@ -1235,7 +1261,8 @@
 
     function userBadges(u) {
       return (u.disabled_at ? '<span class="badge danger">Disabled</span>' : '') +
-        (!u.verified_at ? '<span class="badge draft">Unverified</span>' : '');
+        (!u.verified_at ? '<span class="badge draft">Unverified</span>' : '') +
+        (u.vip ? '<span class="badge">VIP</span>' : '');
     }
 
     function renderUsers() {
@@ -1246,6 +1273,7 @@
         ['Users', users.length],
         ['Verified', count(FILTERS.verified)],
         ['New this week', count(isNew)],
+        ['VIP', count(FILTERS.vip)],
         ['Disabled', count(FILTERS.disabled)],
       ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
 
@@ -1334,6 +1362,7 @@
       f.email.value = u.email;
       f.verified.checked = !!u.verified_at;
       f.disabled.checked = !!u.disabled_at;
+      f.vip.checked = !!u.vip;
       const when = iso => iso ? `${fmtDate(iso.slice(0, 10))} <span class="muted">(${esc(ago(iso))})</span>` : '<span class="muted">—</span>';
       $('#uFacts').innerHTML = [
         ['User ID', '#' + u.id],
@@ -1361,6 +1390,7 @@
       if (f.email.value.trim().toLowerCase() !== editing.email) change.email = f.email.value.trim();
       if (f.verified.checked !== !!editing.verified_at) change.verified = f.verified.checked;
       if (f.disabled.checked !== !!editing.disabled_at) change.disabled = f.disabled.checked;
+      if (f.vip.checked !== !!editing.vip) change.vip = f.vip.checked;
       if (Object.keys(change).length === 1) { uSheet.close(); return; }
       if (change.disabled && !confirm(`Disable ${editing.username}? They will be signed out and can't sign in until you enable the account again.`)) return;
       $('#uSave').disabled = true;

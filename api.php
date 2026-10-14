@@ -38,7 +38,10 @@ define('SOCIAL', array_filter(array_map(
 )));
 // OAuth client ID for "Continue with Google" (Google Cloud Console → Credentials). Empty = button hidden.
 define('GOOGLE_CLIENT_ID', trim((string)($config['google_client_id'] ?? '')));
+// Payment gateway (code in payments/): which driver, currency, the one-time VIP price and each gateway's keys. See config.example.php and payments/README.md.
+define('PAYMENTS', (array)($config['payments'] ?? []) + ['gateway' => '', 'currency' => 'USD', 'vip_price' => 10, 'gateways' => []]);
 require __DIR__ . '/mailer.php';
+require __DIR__ . '/payments/payments.php';
 
 const REMEMBER_COOKIE = 'ipg_remember';
 const REMEMBER_TTL = 180 * 24 * 3600;   // members stay signed in for 180 days (renewed on use)
@@ -563,6 +566,7 @@ function row_to_item(array $r, array $versions = [], array $shots = []): array
         ], $versions),
         'seo' => ['title' => $r['seo_title'] ?? '', 'meta_description' => $r['seo_description'] ?? ''],
         'license_type' => $r['license_type'] ?? 'app-store-link',
+        'access' => isset(premium_ids()[(int)$r['id']]) ? 'premium' : 'free',
         'status' => $r['status'] ?? 'published',
         'publish_at' => iso_date($r['publish_at'] ?? null),
         'notify_email' => !empty($r['notify_email']),
@@ -570,6 +574,20 @@ function row_to_item(array $r, array $versions = [], array $shots = []): array
         'created_at' => iso_date($r['created_at'] ?? null),
         'updated_at' => iso_date($r['updated_at'] ?? null),
     ];
+}
+
+/** Ids of premium games (table game_access, sql/game_access.sql) as keys; no row, or no table yet = free. */
+function premium_ids(): array
+{
+    static $ids;
+    if ($ids === null) {
+        try {
+            $ids = array_flip(db()->query("SELECT game_id FROM game_access WHERE status='premium'")->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Throwable $e) {
+            $ids = [];
+        }
+    }
+    return $ids;
 }
 
 function group_by_game(string $sql): array
@@ -590,7 +608,7 @@ function fetch_admin_rows(): array
                                        AND v.download_url NOT LIKE \'%apps.apple.com%\') AS ipa
                          FROM games g ORDER BY g.updated_at DESC, g.id DESC')->fetchAll();
     // ipa: some version links off the App Store (an IPA file), same test as save_item's $offStore.
-    return array_map(fn($r) => ['id' => (int)$r['id'], 'versions_count' => (int)$r['versions_count'], 'ipa' => (bool)$r['ipa'],
+    return array_map(fn($r) => ['id' => (int)$r['id'], 'access' => isset(premium_ids()[(int)$r['id']]) ? 'premium' : 'free', 'versions_count' => (int)$r['versions_count'], 'ipa' => (bool)$r['ipa'],
                                 'download_url' => (string)$r['download_url'],
                                 'publish_at' => iso_date($r['publish_at'] ?? null)] + $r, $rows);
 }
@@ -611,6 +629,47 @@ function fetch_items(bool $all, bool $full): array
     $vers = group_by_game('SELECT * FROM game_versions ORDER BY id');
     $shots = group_by_game('SELECT game_id, device, url FROM game_screenshots ORDER BY sort, id');
     return array_map(fn($r) => row_to_item($r, $vers[$r['id']] ?? [], $shots[$r['id']] ?? []), $rows);
+}
+
+/** Secret that signs download links for uploaded IPAs ('download_secret' in config.php, else derived from the other secrets). */
+function dl_secret(): string
+{
+    global $config;
+    return (string)($config['download_secret'] ?? '') ?: hash('sha256', ADMIN_PASS . '|' . DB['pass'] . '|ipagame-download');
+}
+
+/** The file name when $url points at an IPA uploaded to this store (uploads/ipa/<name>.ipa), else null. */
+function uploaded_ipa_name(string $url): ?string
+{
+    if (!preg_match('#/uploads/ipa/([A-Za-z0-9._-]+\.ipa)(?:[?\#].*)?$#', $url, $m)) return null;
+    return is_file(IPA_DIR . '/' . $m[1]) ? $m[1] : null;
+}
+
+/**
+ * Uploaded IPAs are never served from a public URL (uploads/ipa/.htaccess blocks it): members get a
+ * download.php link that stops working after a few hours. It ends in .ipa so LiveContainer accepts it.
+ */
+function signed_ipa_url(string $file, int $ttl = 6 * 3600): string
+{
+    $exp = time() + $ttl;
+    return site_url() . '/download/' . $exp . '.' . hash_hmac('sha256', "$exp|$file", dl_secret()) . '/' . $file;
+}
+
+/**
+ * The item as a member may see it: premium games hide their download links from non-VIP members, and
+ * uploaded IPAs get a signed link. Admins get the stored links (the editor saves them back).
+ */
+function protect_item(array $item): array
+{
+    $item['locked'] = false;
+    if (is_admin()) return $item;
+    $item['locked'] = ($item['access'] ?? 'free') === 'premium' && !can_download_premium();
+    foreach ($item['versions'] as &$v) {
+        if ($item['locked']) { $v['download_url'] = ''; continue; }
+        $file = uploaded_ipa_name($v['download_url']);
+        if ($file !== null) $v['download_url'] = signed_ipa_url($file);
+    }
+    return $item;
 }
 
 // Old links use slugs ending in "-ipa"; the database stores them without it.
@@ -675,6 +734,14 @@ function save_item(array $it, ?int $id): int
     } else {
         $sql = 'UPDATE games SET ' . implode(',', array_map(fn($c) => "$c=?", array_keys($cols))) . ' WHERE id=?';
         db()->prepare($sql)->execute([...array_values($cols), $id]);
+    }
+
+    // New items start free; an edit only changes the flag when the form sent one. Skipped until sql/game_access.sql is imported.
+    try {
+        db()->prepare('INSERT INTO game_access (game_id, status) VALUES (?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status)')
+            ->execute([$id, $it['access'] ?? 'free']);
+    } catch (PDOException $e) {
+        if ($e->getCode() !== '42S02') throw $e;
     }
 
     db()->prepare('DELETE FROM game_versions WHERE game_id=?')->execute([$id]);
@@ -786,6 +853,7 @@ function ipa_http_range(string $src, string $range): ?array
 /** Read a byte range from a local path or http(s) URL; returns [bytes, totalSize] or null. */
 function ipa_range(string $src, int $start, int $len, bool $fromEnd = false): ?array
 {
+    if ($file = uploaded_ipa_name($src)) $src = 'uploads/ipa/' . $file;   // our own upload: read it from disk
     if (!preg_match('#^https?://#i', $src)) {
         $p = __DIR__ . '/' . ltrim($src, '/');
         if (!is_file($p)) return null;
@@ -933,6 +1001,8 @@ function clean_item(array $in, ?array $existing): array
     ];
     // "Email members when this goes live": only changed when sent, so other callers keep what is stored.
     if (array_key_exists('notify_email', $in)) $item['notify_email'] = !empty($in['notify_email']);
+    // Free / premium: only changed when sent.
+    if (array_key_exists('access', $in)) $item['access'] = $in['access'] === 'premium' ? 'premium' : 'free';
     $status = (string)($in['status'] ?? '');
     $item['publish_at'] = '';
     if ($status === 'scheduled') {
@@ -1314,7 +1384,7 @@ function mail_overview(): array
     ];
 }
 
-if (PHP_SAPI === 'cli') return;   // publish_scheduled.php only needs the functions above
+if (PHP_SAPI === 'cli' || defined('API_LIB')) return;   // publish_scheduled.php and payments/test_pay.php only need the functions above
 
 try {
     switch ($_GET['action'] ?? '') {
@@ -1392,11 +1462,22 @@ try {
             $slug = isset($_GET['slug']) ? (string)$_GET['slug'] : null;
             $item = find_item($id, $slug);
             if (!$item || (!is_published($item) && !is_admin())) throw new ApiError('Not found', 404);
-            respond(['item' => $item]);
+            respond(['item' => protect_item($item)]);
+
+        /* ---------- Payments (payments/payments.php) ---------- */
+        case 'pay_checkout':
+            require_post();
+            respond(pay_checkout());
+        case 'pay_status':
+            respond(pay_status());
+        case 'pay_notify':      // called by the gateway itself: POST, no cookies, no X-Requested-With
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') throw new ApiError('POST required', 405);
+            pay_notify();
 
         case 'me':
             $pending = pending_user();
-            respond(['admin' => is_admin(), 'user' => current_user(), 'google_client_id' => GOOGLE_CLIENT_ID,
+            $me = current_user();
+            respond(['admin' => is_admin(), 'user' => $me, 'vip' => $me ? is_vip($me['id']) : false, 'google_client_id' => GOOGLE_CLIENT_ID,
                      'pending' => $pending ? ['email' => $pending['email'], 'resend_in' => resend_wait($pending)] : null]);
 
         case 'register':
@@ -1668,6 +1749,23 @@ try {
             foreach ([$removed['icon'], ...$removed['screenshots'], ...$removed['ipad_screenshots']] as $url) remove_unused_upload($url);
             respond(['ok' => true]);
 
+        // Admin: flip one game (or several, ids[]) between free and premium from the list.
+        case 'admin_set_access':
+            require_post();
+            require_admin();
+            $b = body();
+            $ids = array_values(array_unique(array_filter(array_map('intval', (array)($b['ids'] ?? [$b['id'] ?? 0])))));
+            if (!$ids) throw new ApiError('Pick a game', 422);
+            $st = ($b['access'] ?? '') === 'premium' ? 'premium' : 'free';
+            try {
+                $up = db()->prepare('INSERT INTO game_access (game_id, status) SELECT id, ? FROM games WHERE id=?
+                                     ON DUPLICATE KEY UPDATE status = VALUES(status)');
+                foreach ($ids as $id) $up->execute([$st, $id]);
+            } catch (PDOException $e) {
+                throw new ApiError('Import sql/game_access.sql first', 500);
+            }
+            respond(['ok' => true, 'access' => $st]);
+
         /* ---------- Admin: categories ---------- */
         case 'admin_categories':
             require_admin();
@@ -1715,12 +1813,18 @@ try {
             require_admin();
             $rows = db()->query('SELECT id, username, email, created_at, last_login_at, email_verified_at, disabled_at, avatar_url, google_sub
                                  FROM users ORDER BY created_at DESC, id DESC')->fetchAll();
+            try {
+                $vips = array_flip(db()->query('SELECT user_id FROM memberships')->fetchAll(PDO::FETCH_COLUMN));
+            } catch (PDOException $e) {
+                $vips = [];         // sql/payments.sql not imported yet
+            }
             respond(['users' => array_map(fn($u) => [
                 'id' => (int)$u['id'],
                 'username' => $u['username'],
                 'email' => $u['email'],
                 'avatar' => avatar_of($u),
                 'google' => !empty($u['google_sub']),
+                'vip' => isset($vips[(int)$u['id']]),
                 'created_at' => iso_date($u['created_at']),
                 'last_login_at' => iso_date($u['last_login_at']),
                 'verified_at' => iso_date($u['email_verified_at']),
@@ -1764,6 +1868,15 @@ try {
                 db()->prepare('UPDATE users SET ' . implode(',', array_map(fn($c) => "$c=?", array_keys($set))) . ' WHERE id=?')
                     ->execute([...array_values($set), $id]);
             }
+            // Give or take away VIP by hand (no order behind it).
+            if (array_key_exists('vip', $b)) {
+                try {
+                    if ($b['vip']) db()->prepare('INSERT IGNORE INTO memberships (user_id, order_id, created_at) VALUES (?, NULL, UTC_TIMESTAMP())')->execute([$id]);
+                    else db()->prepare('DELETE FROM memberships WHERE user_id=?')->execute([$id]);
+                } catch (PDOException $e) {
+                    throw new ApiError('Import sql/payments.sql first', 500);
+                }
+            }
             respond(['ok' => true]);
 
         case 'admin_user_delete':
@@ -1784,6 +1897,7 @@ try {
         case 'ipa_app_name':
             $item = find_item(null, (string)($_GET['slug'] ?? ''));
             if (!$item || !is_published($item)) throw new ApiError('Not found', 404);
+            if (protect_item($item)['locked']) respond(['name' => null]);
             $url = '';
             foreach ($item['versions'] as $v) {
                 if ((string)$v['version'] === (string)($_GET['version'] ?? '')) { $url = $v['download_url']; break; }
@@ -1802,7 +1916,7 @@ try {
             if (!$me) respond(['ok' => true]);
             $b = body();
             $item = find_item(null, (string)($b['slug'] ?? ''));
-            if (!$item || !is_published($item)) respond(['ok' => true]);
+            if (!$item || !is_published($item) || protect_item($item)['locked']) respond(['ok' => true]);
             $ver = mb_substr(trim((string)($b['version'] ?? '')), 0, 40);
             // Same member + game + version within a minute counts once (double taps).
             $dup = db()->prepare('SELECT 1 FROM downloads WHERE user_id=? AND game_id=? AND version=? AND created_at > ?');

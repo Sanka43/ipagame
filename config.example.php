@@ -43,6 +43,19 @@ return [
     // The iOS app also needs Authorized redirect URIs: https://app.ipagame.store/google_app.php
     // Empty = the Google button is hidden.
     'google_client_id' => '',
+    // VIP membership: a one-time payment that unlocks every premium game (code in payments/, see
+    // payments/README.md). 'gateway' = the driver file in payments/gateways/ ('paddle' on the live site,
+    // 'test' = fake gateway for localhost only).
+    'payments' => [
+        'gateway' => 'paddle',
+        'currency' => 'USD',
+        'vip_price' => 10,
+        'gateways' => [
+            'paddle' => ['api_key' => '', 'client_token' => '', 'price_id' => '', 'webhook_secret' => '', 'sandbox' => true],
+        ],
+    ],
+    // Optional: secret that signs the download links of uploaded IPAs. Empty = derived from the other secrets.
+    'download_secret' => '',
     // Public URL of this site, e.g. 'https://app.ipagame.store'. Set it on the server: emails only
     // link to this address (never to the request's Host header). Empty = auto-detect for icons only.
     'site_url' => '',

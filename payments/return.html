@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Payment</title>
+  <link rel="icon" href="../assets/icons/favicon.ico">
+  <link rel="stylesheet" href="../assets/style.css">
+  <script>window.API_BASE = '../';</script>
+  <script src="../assets/common.js"></script>
+</head>
+<body data-auth="required">
+  <main class="wrap">
+    <h1 class="page-title" id="title">Checking your payment…</h1>
+    <p class="muted" id="msg">This takes a few seconds.</p>
+    <p><a class="btn" id="back" href="../">Back to the store</a></p>
+  </main>
+  <script>
+    // Where every gateway sends the buyer back to (?order=ID[&from=slug][&cancel=1]). The gateway confirms
+    // the payment server-to-server, so wait for the order to turn paid before saying so.
+    const p = new URLSearchParams(location.search);
+    const order = p.get('order'), game = p.get('from');
+    const set = (t, m) => { document.getElementById('title').textContent = t; document.getElementById('msg').textContent = m; };
+    if (game) document.getElementById('back').href = '../game.html?slug=' + encodeURIComponent(game);
+
+    async function check(tries) {
+      let s = 'pending';
+      try { s = (await api('pay_status', { params: { order } })).status; } catch {}
+      if (s === 'paid') return set('Payment received', 'Thank you! You are now a VIP member: every game is unlocked.');
+      if (s === 'failed') return set('Payment failed', 'Nothing was charged. You can try again.');
+      if (s === 'cancelled' || p.has('cancel')) return set('Payment cancelled', 'You can try again any time.');
+      if (tries <= 0) return set('Still waiting…', 'The bank has not confirmed yet. Check the game page again in a minute.');
+      setTimeout(() => check(tries - 1), 2000);
+    }
+    check(p.has('cancel') ? 0 : 15);
+  </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="robots" content="noindex">
+  <title>Become a VIP · Game Store</title>
+  <link rel="icon" href="assets/icons/favicon.ico" sizes="any">
+  <link rel="icon" href="assets/icons/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css?v=20260929t">
+  <style>
+    .vip { max-width: 560px; margin: 0 auto; padding-bottom: 120px; }
+    .vip .back { margin-bottom: 8px; }
+
+    /* Hero */
+    .vip-hero {
+      position: relative; overflow: hidden; text-align: center; color: #fff;
+      padding: 40px 24px 34px; border-radius: 28px; margin-top: 4px;
+      background:
+        radial-gradient(120% 90% at 85% -10%, rgba(255, 196, 82, .55), transparent 55%),
+        radial-gradient(90% 80% at 0% 110%, rgba(236, 72, 153, .5), transparent 60%),
+        linear-gradient(135deg, #3b2bd6, #7c3aed 55%, #c026d3);
+      box-shadow: 0 24px 60px -20px rgba(124, 58, 237, .65);
+    }
+    .vip-hero::before {            /* soft sheen */
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(115deg, rgba(255, 255, 255, .18), transparent 35%);
+    }
+    .vip-crown {
+      position: relative; width: 72px; height: 72px; margin: 0 auto 18px; border-radius: 22px;
+      display: grid; place-items: center;
+      background: linear-gradient(145deg, #ffe08a, #f5a524);
+      box-shadow: 0 14px 30px -8px rgba(245, 165, 36, .8), inset 0 2px 0 rgba(255, 255, 255, .6);
+      animation: vip-float 3.6s ease-in-out infinite;
+    }
+    @keyframes vip-float { 50% { transform: translateY(-6px) rotate(-3deg); } }
+    .vip-hero h1 { position: relative; margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.02em; }
+    .vip-hero p { position: relative; margin: 10px auto 0; max-width: 360px; opacity: .88; }
+    .vip-price { position: relative; margin-top: 22px; display: inline-flex; align-items: baseline; gap: 8px;
+      padding: 10px 20px; border-radius: 999px; background: rgba(255, 255, 255, .16);
+      border: 1px solid rgba(255, 255, 255, .28); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .vip-price b { font-size: 34px; letter-spacing: -.03em; line-height: 1; }
+    .vip-price span { font-size: 13px; opacity: .85; }
+
+    /* Sections */
+    .vip h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 30px 4px 12px; }
+    .vip-perks { display: grid; gap: 10px; }
+    .vip-perk { display: flex; gap: 14px; align-items: center; padding: 14px 16px; border-radius: 18px;
+      background: var(--surface); border: 1px solid var(--border); }
+    .vip-perk .ic { flex: none; width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; color: #fff; }
+    .vip-perk:nth-child(1) .ic { background: linear-gradient(135deg, #3b8bff, #7c3aed); }
+    .vip-perk:nth-child(2) .ic { background: linear-gradient(135deg, #31c46b, #0ea5a4); }
+    .vip-perk:nth-child(3) .ic { background: linear-gradient(135deg, #f5a524, #ec4899); }
+    .vip-perk strong { display: block; font-size: 15px; }
+    .vip-perk span.t { color: var(--muted); font-size: 13.5px; }
+
+    .vip-steps { counter-reset: s; display: grid; gap: 0; margin: 0; padding: 4px 16px; list-style: none;
+      border-radius: 18px; background: var(--surface); border: 1px solid var(--border); }
+    .vip-steps li { counter-increment: s; display: flex; gap: 14px; align-items: center; padding: 13px 0; }
+    .vip-steps li + li { border-top: 1px solid var(--border); }
+    .vip-steps li::before { content: counter(s); flex: none; width: 26px; height: 26px; border-radius: 50%;
+      display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+    .vip-trust { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; margin: 22px 0 6px;
+      color: var(--muted); font-size: 13px; }
+    .vip-trust span { display: inline-flex; align-items: center; gap: 6px; }
+
+    .vip details { border-radius: 16px; background: var(--surface); border: 1px solid var(--border); padding: 0 16px; margin-bottom: 8px; }
+    .vip summary { cursor: pointer; list-style: none; padding: 14px 0; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; }
+    .vip summary::-webkit-details-marker { display: none; }
+    .vip summary::after { content: "+"; color: var(--muted); font-size: 20px; line-height: 1; }
+    .vip details[open] summary::after { content: "–"; }
+    .vip details p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+
+    /* Pay bar: pinned above the tab bar on phones */
+    .vip-cta { position: sticky; bottom: 92px; z-index: 5; margin-top: 26px; padding: 12px; border-radius: 22px;
+      background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: saturate(180%) blur(16px);
+      -webkit-backdrop-filter: saturate(180%) blur(16px); border: 1px solid var(--border); }
+    .vip-pay { position: relative; width: 100%; height: 56px; border: 0; border-radius: 16px; cursor: pointer; color: #fff;
+      font-size: 17px; font-weight: 700; letter-spacing: -.01em;
+      background: linear-gradient(110deg, #3b8bff, #7c3aed 55%, #ec4899) 0 0 / 200% 100%;
+      box-shadow: 0 12px 28px -8px rgba(124, 58, 237, .7), inset 0 1px 0 rgba(255, 255, 255, .25);
+      transition: background-position .5s, transform .12s; }
+    .vip-pay:hover { background-position: 100% 0; }
+    .vip-pay:active { transform: scale(.98); }
+    .vip-pay:disabled { opacity: .7; cursor: default; }
+    .vip-msg:empty { display: none; }
+    .vip-msg { margin: 8px 0 0; text-align: center; font-size: 13.5px; color: var(--muted); }
+    .vip-msg.err { color: var(--danger); }
+    .vip-done { text-align: center; padding: 20px 12px 8px; }
+    .vip-done b { display: block; font-size: 17px; margin-bottom: 4px; }
+    @media (prefers-reduced-motion: reduce) { .vip-crown { animation: none; } }
+  </style>
+</head>
+<body data-auth="required">
+  <main class="wrap vip">
+    <a class="back" id="backLink" href="./">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      Store
+    </a>
+
+    <section class="vip-hero">
+      <div class="vip-crown" aria-hidden="true">
+        <svg width="50" height="50" viewBox="0 0 48 48" fill="none">
+          <path d="M6 16l9 9 9-14 9 14 9-9-3 19H9L6 16Z" fill="#7a4a00"/>
+          <path d="M6 16l9 9 9-14 9 14 9-9-3 19H9L6 16Z" fill="url(#cg)" opacity=".35"/>
+          <circle cx="6" cy="14" r="3" fill="#7a4a00"/><circle cx="24" cy="9" r="3.4" fill="#7a4a00"/><circle cx="42" cy="14" r="3" fill="#7a4a00"/>
+          <rect x="10" y="37" width="28" height="4" rx="2" fill="#7a4a00"/>
+          <circle cx="24" cy="29" r="3" fill="#ffe08a"/><circle cx="15" cy="31" r="1.8" fill="#ffe08a"/><circle cx="33" cy="31" r="1.8" fill="#ffe08a"/>
+          <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+        </svg>
+      </div>
+      <h1>Become VIP</h1>
+      <p>Unlock every premium game and app. Pay once, keep it forever.</p>
+      <div class="vip-price"><b>$10</b><span>one-time · no subscription</span></div>
+    </section>
+
+    <h2>What you get</h2>
+    <div class="vip-perks">
+      <div class="vip-perk">
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></div>
+        <div><strong>Every premium download</strong><span class="t">All premium games and apps, today and in the future.</span></div>
+      </div>
+      <div class="vip-perk">
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></div>
+        <div><strong>Lifetime access</strong><span class="t">One payment. No renewals, nothing to cancel.</span></div>
+      </div>
+      <div class="vip-perk">
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 21.5l8.8-8.8a5 5 0 0 0 0-7.1Z"/></svg></div>
+        <div><strong>Support the store</strong><span class="t">Your donation keeps new games coming.</span></div>
+      </div>
+    </div>
+
+    <h2>How it works</h2>
+    <ol class="vip-steps">
+      <li>Tap the button below to open the secure payment window.</li>
+      <li>Pay $10 with a card or wallet.</li>
+      <li>You become VIP right away and every game unlocks.</li>
+    </ol>
+
+    <div class="vip-trust">
+      <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</span>
+      <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Cards &amp; wallets</span>
+      <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>No card stored here</span>
+    </div>
+
+    <h2>Questions</h2>
+    <details><summary>Is it a subscription?</summary><p>No. $10 is charged once and your VIP membership never expires.</p></details>
+    <details><summary>Do free games cost anything?</summary><p>No. Free games stay free for everyone. VIP only unlocks the premium ones.</p></details>
+    <details><summary>What if my payment does not go through?</summary><p>You are not charged. Try again, or message us from the Support chat in your account.</p></details>
+
+    <div class="vip-cta" id="cta">
+      <button class="vip-pay" id="pay" type="button">Donate $10 &amp; become VIP</button>
+      <p class="vip-msg" id="msg" role="status"></p>
+    </div>
+  </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+
+  <script src="assets/common.js?v=20261013d"></script>
+  <script>
+    // Premium Download buttons lead here (?from=<game slug>). The server decides the price; this page only starts the checkout.
+    const from = (new URLSearchParams(location.search).get('from') || '').replace(/[^a-z0-9-]/g, '');
+    const btn = document.getElementById('pay'), msg = document.getElementById('msg');
+    const gameUrl = from ? 'game.html?slug=' + encodeURIComponent(from) : './';
+    if (from) document.getElementById('backLink').href = gameUrl;
+
+    api('me').then(r => {
+      if (r.vip || r.admin) {
+        const cta = document.getElementById('cta');
+        cta.style.position = 'static';
+        cta.innerHTML = `<div class="vip-done"><b>You are a VIP member</b>
+          <span class="muted">Every premium game is unlocked.</span><br><br>
+          <a class="btn" href="${gameUrl}">${from ? 'Back to the game' : 'Browse games'}</a></div>`;
+      }
+    }).catch(() => {});
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      msg.className = 'vip-msg';
+      msg.textContent = 'Opening the secure payment page…';
+      try {
+        const go = await api('pay_checkout', { body: { from } });
+        if (go.method === 'redirect') { location.href = go.url; return; }
+        const f = Object.assign(document.createElement('form'), { method: 'post', action: go.url });
+        for (const [k, v] of Object.entries(go.fields || {})) f.append(Object.assign(document.createElement('input'), { type: 'hidden', name: k, value: v }));
+        document.body.append(f);
+        f.submit();
+      } catch (err) {
+        msg.className = 'vip-msg err';
+        msg.textContent = err.message;
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

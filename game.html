@@ -52,7 +52,11 @@
     const isInstalled = () => installedHas(slug);
     const isIpa = v => !String(v.download_url).includes('apps.apple.com');
 
+    // Premium games need VIP: the server hides their links from other members, so Download leads to the donate page.
+    let locked = false;
+
     function dlLink(v, label, cls = 'btn') {
+      if (locked) return `<a class="${cls}" href="donate.html?from=${encodeURIComponent(slug)}">${dlIcon}${esc(label)}</a>`;
       if (inApp && isInstalled() && isIpa(v)) {
         return `<a class="${cls}" href="#" data-play="${esc(v.version)}">${playIcon}Play</a>`;
       }
@@ -140,7 +144,7 @@
             <div class="dev">${esc(it.developer || catLabel(it.category))}</div>
             ${latest ? dlLink(latest, 'Download') : ''}
             ${inApp && latest && isInstalled() && isIpa(latest) ? '<a class="how-install" href="#" data-redownload>Download again</a>' : ''}
-            ${latest && !latest.download_url.includes('apps.apple.com') ? `<a class="how-install" href="install.html?from=${encodeURIComponent(it.slug)}">How to install IPA</a>` : ''}
+            ${latest && !locked && !latest.download_url.includes('apps.apple.com') ? `<a class="how-install" href="install.html?from=${encodeURIComponent(it.slug)}">How to install IPA</a>` : ''}
           </div>
         </div>
 
@@ -240,7 +244,10 @@
       el.innerHTML = '<p class="empty">Game not found.</p>';
     } else {
       api('get', { params: { slug } })
-        .then(r => render(r.item))
+        .then(r => {
+          locked = !!r.item.locked;
+          render(r.item);
+        })
         .catch(err => { el.innerHTML = `<p class="empty">${err.status === 404 ? 'Game not found.' : esc(err.message)}</p>`; });
     }
   </script>

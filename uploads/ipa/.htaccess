@@ -1,0 +1,2 @@
+# Uploaded IPAs are only served through download.php with a signed, time-limited link.
+Require all denied

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Checkout</title>
+  <link rel="icon" href="../assets/icons/favicon.ico">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <main class="wrap">
+    <h1 class="page-title">Secure checkout</h1>
+    <p class="muted" id="msg">Opening the payment window…</p>
+    <p><a class="btn ghost" id="cancel" href="../">Cancel</a></p>
+  </main>
+  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script>
+    // Paddle driver's payment page (payments/gateways/paddle.php sends the buyer here with the
+    // transaction it just created). Paddle.js opens the overlay; paying sends the buyer to ?success.
+    const p = new URLSearchParams(location.search);
+    const sameSite = u => { try { return new URL(u, location.href).origin === location.origin; } catch { return false; } };
+    const success = sameSite(p.get('success')) ? p.get('success') : 'return.html';
+    document.getElementById('cancel').href = sameSite(p.get('cancel')) ? p.get('cancel') : '../';
+    if (p.get('env') === 'sandbox') Paddle.Environment.set('sandbox');
+    Paddle.Initialize({
+      token: p.get('token'),
+      eventCallback: e => { if (e.name === 'checkout.closed') document.getElementById('msg').textContent = 'The payment window was closed. Reload this page to try again.'; },
+    });
+    Paddle.Checkout.open({ transactionId: p.get('txn'), settings: { successUrl: success, displayMode: 'overlay' } });
+  </script>
+</body>
+</html>
