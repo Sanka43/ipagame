@@ -98,6 +98,7 @@
         <button type="button" role="tab" data-pane="categories" aria-selected="false">Categories</button>
         <button type="button" role="tab" data-pane="users" aria-selected="false">Users <span class="tab-n" id="usersCount"></span></button>
         <button type="button" role="tab" data-pane="downloads" aria-selected="false">Downloads</button>
+        <button type="button" role="tab" data-pane="payments" aria-selected="false">Payments</button>
         <button type="button" role="tab" data-pane="emails" aria-selected="false">Emails</button>
         <button type="button" role="tab" data-pane="support" aria-selected="false">Support <span class="sp-n" id="supportCount" hidden></span></button>
       </nav>
@@ -225,6 +226,26 @@
           </label>
         </div>
         <div class="admin-list" id="dList"></div>
+      </section>
+
+      <!-- VIP payments -->
+      <section id="paymentsPane" hidden>
+        <div class="stat-cards" id="pStats"></div>
+        <div class="toolbar">
+          <label class="search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="pq" type="search" placeholder="Search name, email or game" autocomplete="off" aria-label="Search payments">
+          </label>
+          <select class="input u-filter" id="pFilter" aria-label="Filter payments">
+            <option value="">All</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed / cancelled</option>
+            <option value="refunded">Refunded</option>
+          </select>
+        </div>
+        <p class="muted" id="pNote" style="font-size:12px;margin:8px 0"></p>
+        <div class="admin-list" id="pList"></div>
       </section>
 
       <!-- Support chat -->
@@ -948,7 +969,7 @@
       }
     });
 
-    const PANES = ['games', 'categories', 'users', 'downloads', 'emails', 'support'];
+    const PANES = ['games', 'categories', 'users', 'downloads', 'payments', 'emails', 'support'];
 
     /* ---------- Store users ---------- */
     let users = [];
@@ -964,6 +985,7 @@
       if (name === 'categories') refreshCategories();
       if (name === 'users' && !usersLoaded) refreshUsers();
       if (name === 'downloads') refreshDownloads();
+      if (name === 'payments') refreshPayments();
       if (name === 'emails') refreshMail();
       if (name === 'support') { pollChats(); pollConv(); }
     }
@@ -1231,6 +1253,53 @@
         </div>`).join('') : `<p class="empty">${dl.downloads.length ? 'No downloads match.' : 'No downloads yet.'}</p>`;
     }
     $('#dq').addEventListener('input', renderDownloads);
+
+    /* ---------- Payments (VIP orders) ---------- */
+    let pay = { currency: 'USD', totals: {}, orders: [] };
+    const money = (n, cur = pay.currency) => {
+      try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur }).format(n || 0); } catch { return `${cur} ${(n || 0).toFixed(2)}`; }
+    };
+    const P_FILTERS = {
+      '': () => true,
+      paid: o => o.status === 'paid',
+      pending: o => o.status === 'pending',
+      failed: o => o.status === 'failed' || o.status === 'cancelled',
+      refunded: o => o.status === 'refunded',
+    };
+    const P_BADGE = { paid: '', pending: 'draft', failed: 'danger', cancelled: 'danger', refunded: 'danger' };
+
+    async function refreshPayments() {
+      try {
+        pay = await api('admin_payments');
+        renderPayments();
+      } catch (err) {
+        $('#pList').innerHTML = `<p class="empty">${esc(/Unknown|doesn't exist|1146|500/i.test(err.message) ? 'Import sql/payments.sql first.' : err.message)}</p>`;
+        handleError(err);
+      }
+    }
+
+    function renderPayments() {
+      const t = pay.totals;
+      $('#pStats').innerHTML = [
+        ['Total revenue', money(t.paid_sum)], ['Paid orders', t.paid_n], ['Today', money(t.today_sum)], ['This month', money(t.month_sum)],
+        ['Refunded', money(t.refunded_sum)], ['Pending', t.pending_n], ['Failed / cancelled', t.failed_n],
+      ].map(([k, n]) => `<div class="card"><div class="n"${typeof n === 'string' && n.length > 8 ? ' style="font-size:22px"' : ''}>${esc(String(n ?? 0))}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
+      $('#pNote').textContent = pay.orders.length >= 2000 ? 'Showing the latest 2000 orders. Totals above cover all orders.' : 'Times are Sri Lanka time. Revenue counts paid orders only.';
+      const q = $('#pq').value.trim().toLowerCase();
+      const list = pay.orders.filter(P_FILTERS[$('#pFilter').value])
+        .filter(o => !q || [o.username, o.email, o.game, o.ref, '#' + o.id].join(' ').toLowerCase().includes(q));
+      $('#pList').innerHTML = list.length ? list.map(o => `<div class="row">
+          <div class="row-info">
+            <div class="row-name">${esc(o.username || '(deleted user)')} <span class="badge ${P_BADGE[o.status] ?? ''}">${esc(o.status)}</span></div>
+            <div class="row-sub">${esc(o.email || '')}</div>
+            <div class="row-sub">${esc(o.paid_at ? 'Paid ' + slTime(o.paid_at) : 'Started ' + slTime(o.created_at))}${o.game ? ' · wanted ' + esc(o.game) : ''}</div>
+            <div class="row-sub">Order #${o.id} · ${esc(o.gateway)}${o.ref ? ' · ' + esc(o.ref) : ''}</div>
+          </div>
+          <div class="row-actions"><strong>${esc(money(o.amount, o.currency))}</strong></div>
+        </div>`).join('') : `<p class="empty">${pay.orders.length ? 'No payments match.' : 'No payments yet.'}</p>`;
+    }
+    $('#pq').addEventListener('input', renderPayments);
+    $('#pFilter').addEventListener('change', renderPayments);
 
     async function refreshUsers() {
       if (!usersLoaded) $('#uList').innerHTML = $('#list .skel-card')?.outerHTML.repeat(4) || '';

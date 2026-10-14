@@ -1470,6 +1470,9 @@ try {
             respond(pay_checkout());
         case 'pay_status':
             respond(pay_status());
+        case 'admin_payments':
+            require_admin();
+            respond(pay_admin_overview());
         case 'pay_notify':      // called by the gateway itself: POST, no cookies, no X-Requested-With
             if ($_SERVER['REQUEST_METHOD'] !== 'POST') throw new ApiError('POST required', 405);
             pay_notify();

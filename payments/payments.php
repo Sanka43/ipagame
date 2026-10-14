@@ -63,8 +63,13 @@ function pay_checkout(): array
 
     $gw = pay_gateway();
     $cur = (string)PAYMENTS['currency'];
-    db()->prepare('INSERT INTO orders (user_id, kind, amount, currency, gateway, status, created_at) VALUES (?,?,?,?,?,?,?)')
-        ->execute([$me['id'], 'vip', $price, $cur, (string)PAYMENTS['gateway'], 'pending', gmdate('Y-m-d H:i:s')]);
+    // The game they were after (shown in the admin Payments tab); needs sql/orders_game.sql.
+    $game = $from !== '' ? find_item(null, $from) : null;
+    $cols = ['user_id' => $me['id'], 'kind' => 'vip', 'amount' => $price, 'currency' => $cur, 'gateway' => (string)PAYMENTS['gateway'],
+             'status' => 'pending', 'created_at' => gmdate('Y-m-d H:i:s')];
+    if ($game && has_column('orders', 'game_name')) $cols += ['game_id' => $game['id'], 'game_name' => mb_substr($game['name'], 0, 255)];
+    db()->prepare('INSERT INTO orders (' . implode(',', array_keys($cols)) . ') VALUES (' . rtrim(str_repeat('?,', count($cols)), ',') . ')')
+        ->execute(array_values($cols));
     $id = (int)db()->lastInsertId();
 
     $base = site_url();
@@ -164,4 +169,36 @@ function pay_status(): array
         }
     }
     return ['status' => $o['status']];
+}
+
+/** Admin Payments tab: totals over all orders plus the latest 2000 with the member and the game they wanted. */
+function pay_admin_overview(): array
+{
+    $game = has_column('orders', 'game_name') ? 'o.game_id, o.game_name' : 'NULL AS game_id, NULL AS game_name';
+    $rows = db()->query("SELECT o.id, o.user_id, o.kind, o.amount, o.currency, o.gateway, o.gateway_ref, o.status, o.created_at, o.paid_at,
+                                $game, u.username, u.email
+                         FROM orders o LEFT JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 2000")->fetchAll();
+    // Sums are in Sri Lanka time boundaries: today / this month start at 00:00 UTC+5:30.
+    $sl = new DateTimeImmutable('now', new DateTimeZone('Asia/Colombo'));
+    $utc = fn(DateTimeImmutable $d) => $d->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $today = $utc($sl->setTime(0, 0));
+    $month = $utc($sl->modify('first day of this month')->setTime(0, 0));
+    $t = db()->prepare("SELECT COALESCE(SUM(status='paid'),0) AS paid_n, COALESCE(SUM(CASE WHEN status='paid' THEN amount END),0) AS paid_sum,
+                               COALESCE(SUM(status='paid' AND paid_at >= ?),0) AS today_n, COALESCE(SUM(CASE WHEN status='paid' AND paid_at >= ? THEN amount END),0) AS today_sum,
+                               COALESCE(SUM(status='paid' AND paid_at >= ?),0) AS month_n, COALESCE(SUM(CASE WHEN status='paid' AND paid_at >= ? THEN amount END),0) AS month_sum,
+                               COALESCE(SUM(status='refunded'),0) AS refunded_n, COALESCE(SUM(CASE WHEN status='refunded' THEN amount END),0) AS refunded_sum,
+                               COALESCE(SUM(status='pending'),0) AS pending_n, COALESCE(SUM(status IN ('failed','cancelled')),0) AS failed_n
+                        FROM orders");
+    $t->execute([$today, $today, $month, $month]);
+    $s = $t->fetch();
+    return [
+        'currency' => PAYMENTS['currency'],
+        'totals' => array_map(fn($v) => str_contains((string)$v, '.') ? (float)$v : (int)$v, $s),
+        'orders' => array_map(fn($r) => [
+            'id' => (int)$r['id'], 'user_id' => (int)$r['user_id'], 'username' => $r['username'], 'email' => $r['email'],
+            'amount' => (float)$r['amount'], 'currency' => $r['currency'], 'gateway' => $r['gateway'], 'ref' => $r['gateway_ref'],
+            'status' => $r['status'], 'game' => $r['game_name'], 'game_id' => $r['game_id'] === null ? null : (int)$r['game_id'],
+            'created_at' => iso_date($r['created_at']), 'paid_at' => iso_date($r['paid_at']),
+        ], $rows),
+    ];
 }
