@@ -164,6 +164,39 @@ function fetchBundleName(slug, version) {
 function installedRemove(slug) {
   try { localStorage.setItem(INST_KEY, JSON.stringify(installedList().filter(x => x.slug !== slug))); } catch {}
 }
+// Open a livecontainer:// link. A web page cannot ask whether LiveContainer is installed, but opening it sends this page to
+// the background: if the page is still in front after a moment, LiveContainer is probably missing, so say where to get it.
+function openLiveContainer(url) {
+  let left = false;
+  const gone = () => { left = true; };
+  document.addEventListener('visibilitychange', gone, { once: true });
+  window.addEventListener('pagehide', gone, { once: true });
+  window.addEventListener('blur', gone, { once: true });
+  location.href = url;
+  setTimeout(() => {
+    document.removeEventListener('visibilitychange', gone);
+    window.removeEventListener('pagehide', gone);
+    window.removeEventListener('blur', gone);
+    if (!left && document.visibilityState === 'visible') lcMissingPopup();
+  }, 2500);
+}
+function lcMissingPopup() {
+  if (document.getElementById('lcMissing')) return;
+  const box = document.createElement('div');
+  box.id = 'lcMissing';
+  box.setAttribute('role', 'alertdialog');
+  box.style.cssText = 'position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.55)';
+  box.innerHTML = `<div style="max-width:340px;width:100%;background:var(--surface);color:var(--text);border-radius:20px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px">LiveContainer needed</div>
+      <p class="muted" style="margin:0 0 16px;font-size:14px">If LiveContainer did not open, it is probably not installed. Get it from
+        <strong style="color:var(--text)">livecontainer.site</strong>, install it, then tap again.</p>
+      <a class="btn block" href="https://livecontainer.site" target="_blank" rel="noopener">Get LiveContainer</a>
+      <button type="button" class="btn block ghost" style="margin-top:8px" data-close>Close</button>
+    </div>`;
+  box.addEventListener('click', e => { if (e.target === box || e.target.closest('[data-close]')) box.remove(); });
+  document.body.append(box);
+}
+
 // Launch the game in LiveContainer (its .app folder name is read from the IPA by the server).
 async function playInstalled(slug, version) {
   const entry = installedList().find(x => x.slug === slug);
@@ -177,9 +210,9 @@ async function playInstalled(slug, version) {
     const guess = entry.name.replace(/\s*[(\[]?IPA[)\]]?\s*$/i, '').trim();
     if (guess) name = guess + '.app';
   }
-  if (name) { location.href = 'livecontainer://livecontainer-launch?bundle-name=' + encodeURIComponent(name); return; }
+  if (name) { openLiveContainer('livecontainer://livecontainer-launch?bundle-name=' + encodeURIComponent(name)); return; }
   alert('Could not find this game inside LiveContainer automatically. LiveContainer will open: tap the game there to play.');
-  location.href = 'livecontainer://';
+  openLiveContainer('livecontainer://');
 }
 
 function tabBarHTML(active = '') {
