@@ -73,12 +73,25 @@ return new class($cfg) implements Gateway, StatusLookup {
                 'amount' => ((int)($item['price']['unit_price']['amount'] ?? 0)) / 100, 'currency' => (string)($d['currency_code'] ?? '')];
     }
 
+    /** The Paddle customer for this email (so the checkout opens with the member's email filled in), or null. */
+    private function customerId(array $buyer): ?string
+    {
+        try {
+            return (string)$this->api('/customers', ['email' => $buyer['email'], 'name' => mb_substr($buyer['name'], 0, 100)])['id'];
+        } catch (GatewayError $e) {
+            // Already a customer: Paddle's conflict message names the existing one ("... customer of id ctm_...").
+            return preg_match('/\b(ctm_[0-9a-z]+)\b/', $e->getMessage(), $m) ? $m[1] : null;
+        }
+    }
+
     public function begin(array $order, array $buyer, array $urls): array
     {
-        $txn = $this->api('/transactions', [
+        $body = [
             'items' => [['price_id' => $this->cfg['price_id'], 'quantity' => 1]],
             'custom_data' => ['order_id' => (string)$order['id']],
-        ]);
+        ];
+        if ($cust = $this->customerId($buyer)) $body['customer_id'] = $cust;
+        $txn = $this->api('/transactions', $body);
         $page = dirname($urls['return']) . '/paddle_checkout.html?' . http_build_query([
             'txn' => $txn['id'], 'token' => $this->cfg['client_token'],
             'env' => !empty($this->cfg['sandbox']) ? 'sandbox' : 'live', 'success' => $urls['return'], 'cancel' => $urls['cancel'],
