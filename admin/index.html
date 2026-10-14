@@ -239,7 +239,6 @@
           <select class="input u-filter" id="pFilter" aria-label="Filter payments">
             <option value="">All</option>
             <option value="paid">Paid</option>
-            <option value="pending">Pending</option>
             <option value="failed">Failed / cancelled</option>
             <option value="refunded">Refunded</option>
           </select>
@@ -1262,7 +1261,6 @@
     const P_FILTERS = {
       '': () => true,
       paid: o => o.status === 'paid',
-      pending: o => o.status === 'pending',
       failed: o => o.status === 'failed' || o.status === 'cancelled',
       refunded: o => o.status === 'refunded',
     };
@@ -1282,7 +1280,7 @@
       const t = pay.totals;
       $('#pStats').innerHTML = [
         ['Total revenue', money(t.paid_sum)], ['Paid orders', t.paid_n], ['Today', money(t.today_sum)], ['This month', money(t.month_sum)],
-        ['Refunded', money(t.refunded_sum)], ['Pending', t.pending_n], ['Failed / cancelled', t.failed_n],
+        ['Refunded', money(t.refunded_sum)], ['Failed / cancelled', t.failed_n],
       ].map(([k, n]) => `<div class="card"><div class="n"${typeof n === 'string' && n.length > 8 ? ' style="font-size:22px"' : ''}>${esc(String(n ?? 0))}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
       $('#pNote').textContent = pay.orders.length >= 2000 ? 'Showing the latest 2000 orders. Totals above cover all orders.' : 'Times are Sri Lanka time. Revenue counts paid orders only.';
       const q = $('#pq').value.trim().toLowerCase();

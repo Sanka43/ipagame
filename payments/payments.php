@@ -171,13 +171,13 @@ function pay_status(): array
     return ['status' => $o['status']];
 }
 
-/** Admin Payments tab: totals over all orders plus the latest 2000 with the member and the game they wanted. */
+/** Admin Payments tab: totals plus the latest 2000 finished orders (abandoned, still-pending checkouts are left out). */
 function pay_admin_overview(): array
 {
     $game = has_column('orders', 'game_name') ? 'o.game_id, o.game_name' : 'NULL AS game_id, NULL AS game_name';
     $rows = db()->query("SELECT o.id, o.user_id, o.kind, o.amount, o.currency, o.gateway, o.gateway_ref, o.status, o.created_at, o.paid_at,
                                 $game, u.username, u.email
-                         FROM orders o LEFT JOIN users u ON u.id = o.user_id ORDER BY o.id DESC LIMIT 2000")->fetchAll();
+                         FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE o.status <> 'pending' ORDER BY o.id DESC LIMIT 2000")->fetchAll();
     // Sums are in Sri Lanka time boundaries: today / this month start at 00:00 UTC+5:30.
     $sl = new DateTimeImmutable('now', new DateTimeZone('Asia/Colombo'));
     $utc = fn(DateTimeImmutable $d) => $d->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
