@@ -57,6 +57,7 @@ const LIMIT_SIGNUPS = [5, 60 * 60];        // new accounts per IP
 const LIMIT_MAIL_IP = [10, 60 * 60];       // code emails requested per IP
 const LIMIT_MAIL_TO = [5, 60 * 60];        // code emails to one address
 const LIMIT_CHAT = [20, 5 * 60];           // support chat messages per member
+const LIMIT_CHECKOUT = [10, 60 * 60];      // VIP checkouts started per member
 
 const CHAT_MAX_LEN = 2000;                 // characters per support message
 const MAX_SHOTS = 20;                      // screenshots per device on one item

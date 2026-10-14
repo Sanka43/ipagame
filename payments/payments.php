@@ -4,6 +4,8 @@ declare(strict_types=1);
 // Loaded by api.php (actions pay_checkout, pay_notify, pay_status). Everything gateway-specific
 // lives in payments/gateways/<name>.php behind the Gateway interface - see payments/README.md.
 
+if (!defined('PAYMENTS')) { http_response_code(404); exit; }      // only loaded by api.php
+
 require_once __DIR__ . '/src/Gateway.php';
 
 /** The gateway driver chosen by config.php ('payments' => ['gateway' => 'paddle']). */
@@ -60,6 +62,8 @@ function pay_checkout(): array
     $price = pay_vip_price();
     if ($price <= 0) throw new ApiError('Payments are not set up', 503);
     $from = pay_clean_from((string)(body()['from'] ?? ''));
+    rate_check('pay:' . $me['id'], LIMIT_CHECKOUT, 'Too many payment attempts. Try again later.');
+    rate_hit('pay:' . $me['id']);
 
     $gw = pay_gateway();
     $cur = (string)PAYMENTS['currency'];

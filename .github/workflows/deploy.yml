@@ -26,6 +26,9 @@ jobs:
       - name: PHP syntax check
         run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
 
+      - name: JavaScript syntax check
+        run: python3 .github/scripts/check_js.py
+
       - name: Validate apps.json
         run: python3 -c "import json; json.load(open('data/apps.json', encoding='utf-8'))"
 
@@ -59,6 +62,8 @@ jobs:
             ios/**
             scripts/**
             config.example.php
+            payments/README.md
+            payments/selfcheck.php
             **/*.bak
             **/*.zip
             *.mobileconfig

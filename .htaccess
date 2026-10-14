@@ -6,11 +6,8 @@
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$ [NC]
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
-</IfModule>
 
-# Signed IPA download links (download.php checks the signature): /download/<expires>.<sig>/<file>.ipa
-<IfModule mod_rewrite.c>
-  RewriteEngine On
+  # Signed IPA download links (download.php checks the signature): /download/<expires>.<sig>/<file>.ipa
   RewriteRule ^download/(\d+)\.([a-f0-9]{64})/([A-Za-z0-9._-]+\.ipa)$ download.php?e=$1&s=$2&f=$3 [L,QSA]
 </IfModule>
 
