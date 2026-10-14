@@ -1462,6 +1462,7 @@ try {
             $slug = isset($_GET['slug']) ? (string)$_GET['slug'] : null;
             $item = find_item($id, $slug);
             if (!$item || (!is_published($item) && !is_admin())) throw new ApiError('Not found', 404);
+            header('Cache-Control: private, no-store');      // links depend on who asks (VIP / not): never reuse a cached answer
             respond(['item' => protect_item($item)]);
 
         /* ---------- Payments (payments/payments.php) ---------- */
