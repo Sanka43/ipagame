@@ -221,7 +221,6 @@
             <input type="checkbox" class="switch" id="pushToggle">
           </label>
           <p class="muted" id="pushHint" style="margin:6px 16px 10px;font-size:13px" hidden></p>
-          <button type="button" class="ios-row" id="pushTest" hidden><span class="k">Send a test notification</span></button>
         </div>
         <div class="ios-list">
           <a class="ios-row" href="./?type=game">
@@ -374,31 +373,18 @@
       }
       const on = !!(await pushCurrent()) && Notification.permission === 'granted';
       $('#pushToggle').checked = on;
-      $('#pushTest').hidden = !on;
     }
     $('#pushToggle').addEventListener('change', async e => {
       const box = e.target, hint = $('#pushHint');
       hint.hidden = true;
       try {
         if (box.checked) await pushSubscribe(); else await pushUnsubscribe();
-        $('#pushTest').hidden = !box.checked;
       } catch (err) {
         box.checked = !box.checked;
         hint.textContent = err.message;
         hint.hidden = false;
       }
     });
-    $('#pushTest').addEventListener('click', async e => {
-      const b = e.currentTarget, hint = $('#pushHint');
-      b.disabled = true;
-      try {
-        const r = await api('push_test', { body: {} });
-        hint.textContent = r.sent ? 'Test sent — it should arrive in a moment.' : 'The push service did not accept it. Turn notifications off and on again.';
-      } catch (err) { hint.textContent = err.message; }
-      hint.hidden = false;
-      b.disabled = false;
-    });
-
     $('#notifyToggle').addEventListener('change', async e => {
       const box = e.target;
       try {

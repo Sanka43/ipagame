@@ -2062,15 +2062,6 @@ try {
                 ->execute([$me['id'], hash('sha256', (string)(body()['endpoint'] ?? ''))]);
             respond(['ok' => true]);
 
-        // "Send me a test" button: pushes a sample notification to the member's own phones.
-        case 'push_test':
-            require_post();
-            $me = current_user() ?? throw new ApiError('Login required', 401);
-            if (!push_ready()) throw new ApiError('Not available yet', 500);
-            $subs = push_audience((int)$me['id']);
-            if (!$subs) throw new ApiError('Turn notifications on first', 404);
-            respond(push_send($subs, ['title' => BRAND, 'body' => 'Notifications are working on this device', 'url' => './']));
-
         /* ---------- New-app emails ---------- */
         // Member: turn the "new app" emails on or off from the account page.
         case 'set_notify':
