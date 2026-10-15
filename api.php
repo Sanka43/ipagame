@@ -1256,6 +1256,8 @@ function chat_post(int $userId, bool $admin, string $text): array
 
 /* ---------- New-app emails to members (tables in sql/new_app_emails.sql) ---------- */
 
+require __DIR__ . '/webpush.php';
+
 const MAIL_BATCH = 25;       // emails per cron run (the cron runs every minute)
 const MAIL_TRIES = 3;        // attempts per recipient before it counts as failed
 
@@ -1385,6 +1387,7 @@ function mail_enqueue_due(): int
         $claim->execute([$g['id']]);
         if ($claim->rowCount() === 1) {
             mail_enqueue('game', (int)$g['id'], 'New on ' . BRAND . ': ' . $g['name'], null);
+            push_announce_game((int)$g['id']);
             $n++;
         }
     }
@@ -2025,6 +2028,42 @@ try {
                          'game_id' => $r['game_id'] === null ? null : (int)$r['game_id'], 'game' => $r['game_name'],
                          'version' => $r['version'], 'created_at' => iso_date($r['created_at']),
                      ], $rows)]);
+
+        /* ---------- Push notifications (phones with the Home Screen app) ---------- */
+        // Public VAPID key the browser needs to subscribe. 'ready' = sql/push.sql imported.
+        case 'push_key':
+            require_member();
+            if (!push_ready()) respond(['ready' => false]);
+            respond(['ready' => true, 'key' => push_vapid()['pub']]);
+
+        case 'push_subscribe':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Login required', 401);
+            if (!push_ready()) throw new ApiError('Not available yet', 500);
+            $b = body();
+            $ep = (string)($b['endpoint'] ?? '');
+            $k = (array)($b['keys'] ?? []);
+            if (!preg_match('#^https://[^\s]{10,1000}$#', $ep) || empty($k['p256dh']) || empty($k['auth'])) throw new ApiError('Bad subscription', 422);
+            db()->prepare('INSERT INTO push_subscriptions (user_id, endpoint_hash, endpoint, p256dh, auth, created_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP())
+                           ON DUPLICATE KEY UPDATE user_id=VALUES(user_id), endpoint=VALUES(endpoint), p256dh=VALUES(p256dh), auth=VALUES(auth)')
+                ->execute([$me['id'], hash('sha256', $ep), $ep, substr((string)$k['p256dh'], 0, 255), substr((string)$k['auth'], 0, 100)]);
+            respond(['ok' => true]);
+
+        case 'push_unsubscribe':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Login required', 401);
+            if (push_ready()) db()->prepare('DELETE FROM push_subscriptions WHERE user_id=? AND endpoint_hash=?')
+                ->execute([$me['id'], hash('sha256', (string)(body()['endpoint'] ?? ''))]);
+            respond(['ok' => true]);
+
+        // "Send me a test" button: pushes a sample notification to the member's own phones.
+        case 'push_test':
+            require_post();
+            $me = current_user() ?? throw new ApiError('Login required', 401);
+            if (!push_ready()) throw new ApiError('Not available yet', 500);
+            $subs = push_audience((int)$me['id']);
+            if (!$subs) throw new ApiError('Turn notifications on first', 404);
+            respond(push_send($subs, ['title' => BRAND, 'body' => 'Notifications are working on this device', 'url' => './']));
 
         /* ---------- New-app emails ---------- */
         // Member: turn the "new app" emails on or off from the account page.

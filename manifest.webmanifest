@@ -1,0 +1,13 @@
+{
+  "name": "IPA Game Store",
+  "short_name": "IPA Game",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "assets/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/logo-mark.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

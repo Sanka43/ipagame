@@ -11,6 +11,8 @@
   RewriteRule ^download/(\d+)\.([a-f0-9]{64})/([A-Za-z0-9._-]+\.ipa)$ download.php?e=$1&s=$2&f=$3 [L,QSA]
 </IfModule>
 
+AddType application/manifest+json .webmanifest
+
 <IfModule mod_headers.c>
   # No other site may frame these pages (stops clickjacking on the admin panel and sign-in).
   Header always set X-Frame-Options "DENY"
@@ -28,6 +30,10 @@
   # Versioned CSS/JS (?v=...) never changes under the same URL; images are uploaded under unique names.
   <FilesMatch "\.(css|js)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # The service worker must never be cached for long, or phones would keep running an old one.
+  <FilesMatch "^sw\.js$">
+    Header set Cache-Control "no-cache"
   </FilesMatch>
   <FilesMatch "\.(png|jpe?g|webp|gif|svg|ico|woff2?)$">
     Header set Cache-Control "public, max-age=2592000"
