@@ -281,3 +281,51 @@ function toast(msg, isError = false) {
   clearTimeout(el._t);
   el._t = setTimeout(() => el.classList.remove('show'), 2600);
 }
+
+// ---- Push notifications (new releases) ----
+// Works in the Home Screen app (also the old Web Clip) on iOS 16.4+ and in desktop/Android browsers.
+const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+async function pushCurrent() {
+  const reg = pushSupported && await navigator.serviceWorker.getRegistration();
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+
+/** Asks for permission (must run inside a tap), subscribes this device and tells the server. */
+async function pushSubscribe() {
+  if (await Notification.requestPermission() !== 'granted') throw new Error('Notifications are blocked. Allow them in Settings → Notifications.');
+  const reg = await navigator.serviceWorker.register(BASE + 'sw.js');
+  await navigator.serviceWorker.ready;
+  const k = await api('push_key');
+  if (!k.ready) throw new Error('Notifications are not available yet.');
+  const key = Uint8Array.from(atob(k.key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  await api('push_subscribe', { body: sub.toJSON() });
+  try { localStorage.removeItem('pushOff'); } catch {}
+}
+
+async function pushUnsubscribe() {
+  try { localStorage.setItem('pushOff', '1'); } catch {}      // the member switched it off: do not turn it on again by itself
+  const sub = await pushCurrent();
+  if (sub) { await api('push_unsubscribe', { body: { endpoint: sub.endpoint } }); await sub.unsubscribe(); }
+}
+
+/**
+ * Notifications are on by default: the first tap on a signed-in page opens the system "Allow notifications?" prompt
+ * (iOS only allows that inside a tap). Devices that already allowed it just re-register quietly once per session,
+ * so a different member signing in on the same phone gets the notifications too.
+ */
+function pushAutoEnable() {
+  if (!pushSupported || document.body.dataset.auth !== 'required') return;
+  let off = false;
+  try { off = !!localStorage.getItem('pushOff'); } catch {}
+  if (off || Notification.permission === 'denied') return;
+  if (Notification.permission === 'granted') {
+    let seen = false;
+    try { seen = !!sessionStorage.getItem('pushSynced'); sessionStorage.setItem('pushSynced', '1'); } catch {}
+    if (!seen) pushSubscribe().catch(() => {});
+    return;
+  }
+  document.addEventListener('click', () => pushSubscribe().catch(() => {}), { once: true, capture: true });
+}
+document.addEventListener('DOMContentLoaded', pushAutoEnable);

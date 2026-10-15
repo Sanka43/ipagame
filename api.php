@@ -1387,7 +1387,6 @@ function mail_enqueue_due(): int
         $claim->execute([$g['id']]);
         if ($claim->rowCount() === 1) {
             mail_enqueue('game', (int)$g['id'], 'New on ' . BRAND . ': ' . $g['name'], null);
-            push_announce_game((int)$g['id']);
             $n++;
         }
     }
@@ -1468,6 +1467,13 @@ function mail_overview(): array
 }
 
 if (PHP_SAPI === 'cli' || defined('API_LIB')) return;   // publish_scheduled.php and payments/test_pay.php only need the functions above
+
+// New releases are pushed to phones after the response has gone out, so saving a game never waits on it.
+register_shutdown_function(function () {
+    ignore_user_abort(true);
+    if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
+    push_sweep();
+});
 
 try {
     switch ($_GET['action'] ?? '') {

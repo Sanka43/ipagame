@@ -6,12 +6,12 @@
 function b64u(string $s): string { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
 function b64u_dec(string $s): string { return (string)base64_decode(strtr($s, '-_', '+/')); }
 
-/** False until sql/push.sql has been imported. */
+/** False until sql/push.sql and sql/push_release.sql have been imported. */
 function push_ready(): bool
 {
     static $ok;
     if ($ok === null) {
-        try { $ok = (bool)db()->query("SHOW TABLES LIKE 'push_subscriptions'")->fetch(); } catch (Throwable) { $ok = false; }
+        try { $ok = (bool)db()->query("SHOW TABLES LIKE 'push_subscriptions'")->fetch() && has_column('games', 'pushed_at'); } catch (Throwable) { $ok = false; }
     }
     return $ok;
 }
@@ -129,11 +129,10 @@ function push_forget(int $id): void
     db()->prepare('DELETE FROM push_subscriptions WHERE id=?')->execute([$id]);
 }
 
-/** Phones of members who may be notified (not blocked, "new apps" switch on when that column exists). */
+/** Phones of members who allowed notifications (the subscription itself is the opt-in; blocked members are skipped). */
 function push_audience(?int $userId = null): array
 {
     $where = 'u.disabled_at IS NULL';
-    if ($userId === null && has_column('users', 'notify_new_apps')) $where .= ' AND u.notify_new_apps = 1';
     if ($userId !== null) $where .= ' AND u.id = ' . $userId;
     return db()->query("SELECT p.id, p.endpoint, p.p256dh, p.auth FROM push_subscriptions p JOIN users u ON u.id = p.user_id WHERE $where")->fetchAll();
 }
@@ -155,5 +154,27 @@ function push_announce_game(int $gameId): void
         ]);
     } catch (Throwable $e) {
         error_log('push_announce_game: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Announces every published game that has not been pushed yet (a few per run), once each.
+ * Runs after requests, from the crons and when a scheduled release goes live; independent of the email tick.
+ */
+function push_sweep(): int
+{
+    try {
+        if (!push_ready()) return 0;
+        $ids = db()->query("SELECT id FROM games WHERE status='published' AND pushed_at IS NULL ORDER BY id LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
+        $claim = db()->prepare('UPDATE games SET pushed_at=UTC_TIMESTAMP(), updated_at=updated_at WHERE id=? AND pushed_at IS NULL');
+        $n = 0;
+        foreach ($ids as $id) {
+            $claim->execute([$id]);                       // two runs never announce the same game twice
+            if ($claim->rowCount() === 1) { push_announce_game((int)$id); $n++; }
+        }
+        return $n;
+    } catch (Throwable $e) {
+        error_log('push_sweep: ' . $e->getMessage());
+        return 0;
     }
 }

@@ -281,7 +281,7 @@
 
   <nav class="tabbar" id="tabbar" aria-label="Main" hidden></nav>
 
-  <script src="assets/common.js?v=20261014d"></script>
+  <script src="assets/common.js?v=20261015a"></script>
   <script src="assets/chat.js?v=20260928e"></script>
   <script>
     const $ = s => document.querySelector(s);
@@ -360,27 +360,19 @@
       unmountChat ||= mountChat($('#supportBtn'));
     }
 
-    // ---- Push notifications (Home Screen web app, iOS 16.4+) ----
-    const pushOK = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-    const keyBytes = k => Uint8Array.from(atob(k.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-    async function pushSub() {
-      const reg = await navigator.serviceWorker.getRegistration();
-      return reg ? reg.pushManager.getSubscription() : null;
-    }
+    // ---- Push notifications (Home Screen web app / Web Clip, iOS 16.4+); helpers are in common.js ----
     async function pushInit() {
       $('#pushList').hidden = false;
       const hint = $('#pushHint');
-      if (!pushOK) {
+      if (!pushSupported) {
         $('#pushToggle').disabled = true;
         hint.textContent = /iPhone|iPad/.test(navigator.userAgent)
-          ? (navigator.standalone
-            ? 'This icon was installed with the old profile, which cannot show notifications. Remove it, then open this site in Safari and tap Share → Add to Home Screen (iOS 16.4 or newer).'
-            : 'To get notifications on iPhone: tap Share → Add to Home Screen, then open the app from the Home Screen (iOS 16.4 or newer).')
+          ? 'To get notifications on iPhone: tap Share → Add to Home Screen, then open the app from the Home Screen (iOS 16.4 or newer).'
           : 'This browser does not support push notifications.';
         hint.hidden = false;
         return;
       }
-      const on = !!(await pushSub()) && Notification.permission === 'granted';
+      const on = !!(await pushCurrent()) && Notification.permission === 'granted';
       $('#pushToggle').checked = on;
       $('#pushTest').hidden = !on;
     }
@@ -388,18 +380,7 @@
       const box = e.target, hint = $('#pushHint');
       hint.hidden = true;
       try {
-        if (box.checked) {
-          if (await Notification.requestPermission() !== 'granted') throw new Error('Notifications are blocked. Allow them in Settings → Notifications.');
-          const reg = await navigator.serviceWorker.register('sw.js');
-          await navigator.serviceWorker.ready;
-          const k = await api('push_key');
-          if (!k.ready) throw new Error('Notifications are not available yet.');
-          const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(k.key) });
-          await api('push_subscribe', { body: sub.toJSON() });
-        } else {
-          const sub = await pushSub();
-          if (sub) { await api('push_unsubscribe', { body: { endpoint: sub.endpoint } }); await sub.unsubscribe(); }
-        }
+        if (box.checked) await pushSubscribe(); else await pushUnsubscribe();
         $('#pushTest').hidden = !box.checked;
       } catch (err) {
         box.checked = !box.checked;
