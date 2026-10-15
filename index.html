@@ -485,7 +485,10 @@
         if (id !== reqId) return;               // a newer request replaced this one
         const text = JSON.stringify(res);
         if (!state.q) lcSet(params, text);
-        if (text === cachedText) writeUrl(push); // cache was already current: nothing to repaint
+        if (text === cachedText) {              // cache was already current: nothing to repaint
+          writeUrl(push);
+          if (v === 'today') heroPicks(res).forEach(h => loadHeroImage(h.slug, id)); // cache paint skipped the banner images
+        }
         else paint(res, true);
       } catch (err) {
         if (id !== reqId) return;
