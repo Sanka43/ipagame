@@ -373,7 +373,9 @@
       if (!pushOK) {
         $('#pushToggle').disabled = true;
         hint.textContent = /iPhone|iPad/.test(navigator.userAgent)
-          ? 'To get notifications on iPhone: tap Share → Add to Home Screen, then open the app from the Home Screen (iOS 16.4 or newer).'
+          ? (navigator.standalone
+            ? 'This icon was installed with the old profile, which cannot show notifications. Remove it, then open this site in Safari and tap Share → Add to Home Screen (iOS 16.4 or newer).'
+            : 'To get notifications on iPhone: tap Share → Add to Home Screen, then open the app from the Home Screen (iOS 16.4 or newer).')
           : 'This browser does not support push notifications.';
         hint.hidden = false;
         return;
