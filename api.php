@@ -601,7 +601,7 @@ function group_by_game(string $sql): array
 /** Admin list rows: just what the list shows. The editor loads one full item with 'get'. */
 function fetch_admin_rows(): array
 {
-    $pub = has_publish_at() ? ' g.publish_at,' : '';
+    $pub = (has_publish_at() ? ' g.publish_at,' : '') . (has_column('games', 'admin_mark') ? ' g.admin_mark,' : '');
     $rows = db()->query('SELECT g.id, g.slug, g.type, g.name, g.developer, g.category, g.icon, g.latest_version, g.status,' . $pub . '
                                 (SELECT COUNT(*) FROM game_versions v WHERE v.game_id = g.id) AS versions_count,
                                 (SELECT v.download_url FROM game_versions v WHERE v.game_id = g.id ORDER BY v.id LIMIT 1) AS download_url,
@@ -611,7 +611,7 @@ function fetch_admin_rows(): array
     // ipa: some version links off the App Store (an IPA file), same test as save_item's $offStore.
     return array_map(fn($r) => ['id' => (int)$r['id'], 'access' => isset(premium_ids()[(int)$r['id']]) ? 'premium' : 'free', 'versions_count' => (int)$r['versions_count'], 'ipa' => (bool)$r['ipa'],
                                 'download_url' => (string)$r['download_url'],
-                                'publish_at' => iso_date($r['publish_at'] ?? null)] + $r, $rows);
+                                'publish_at' => iso_date($r['publish_at'] ?? null), 'mark' => (string)($r['admin_mark'] ?? '')] + $r, $rows);
 }
 
 /** All items, newest first. $full adds descriptions, versions and screenshots. */
@@ -1858,6 +1858,20 @@ try {
                 throw new ApiError('Import sql/game_access.sql first', 500);
             }
             respond(['ok' => true, 'access' => $st]);
+
+        // Admin: put a colour mark on one game (or several, ids[]) in the list; an empty mark clears it.
+        case 'admin_set_mark':
+            require_post();
+            require_admin();
+            $b = body();
+            $ids = array_values(array_unique(array_filter(array_map('intval', (array)($b['ids'] ?? [$b['id'] ?? 0])))));
+            if (!$ids) throw new ApiError('Pick a game', 422);
+            $mark = (string)($b['mark'] ?? '');
+            if ($mark !== '' && !in_array($mark, ['red', 'yellow', 'green', 'blue'], true)) throw new ApiError('Unknown colour', 422);
+            if (!has_column('games', 'admin_mark')) throw new ApiError('Import sql/games_mark.sql first', 500);
+            $up = db()->prepare('UPDATE games SET admin_mark=?, updated_at=updated_at WHERE id=?');
+            foreach ($ids as $id) $up->execute([$mark === '' ? null : $mark, $id]);
+            respond(['ok' => true, 'mark' => $mark]);
 
         /* ---------- Admin: categories ---------- */
         case 'admin_categories':

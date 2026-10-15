@@ -10,6 +10,15 @@
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="../assets/style.css?v=20261013a">
     <style>
+      .mark-dot { position: relative; width: 14px; height: 14px; padding: 0; margin-right: 8px; vertical-align: -1px; border-radius: 50%;
+        border: 2px solid var(--muted); background: transparent; opacity: .45; cursor: pointer; }
+      .mark-dot::before { content: ""; position: absolute; inset: -9px; }   /* bigger tap area */
+      .mark-dot[data-c] { opacity: 1; }
+      .mark-dot[data-c=""] { opacity: .45; }
+      .mark-dot[data-c="red"] { background: #ef4444; border-color: #ef4444; }
+      .mark-dot[data-c="yellow"] { background: #facc15; border-color: #facc15; }
+      .mark-dot[data-c="green"] { background: #22c55e; border-color: #22c55e; }
+      .mark-dot[data-c="blue"] { background: #3b82f6; border-color: #3b82f6; }
       .reg-chart { margin-top: 12px; }
       .reg-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
       .reg-title { font-weight: 600; }
@@ -127,6 +136,11 @@
           <option value="free">Free</option>
           <option value="premium">Premium</option>
           <option value="nolink">No download link</option>
+          <option value="marked">Marked (any colour)</option>
+          <option value="mark-red">Marked red</option>
+          <option value="mark-yellow">Marked yellow</option>
+          <option value="mark-green">Marked green</option>
+          <option value="mark-blue">Marked blue</option>
         </select>
         <select class="input u-filter" id="gSource" aria-label="Filter by download source">
           <option value="">IPA &amp; App Store</option>
@@ -642,7 +656,13 @@
       nolink: i => !i.download_url,
       free: i => i.access !== 'premium',
       premium: i => i.access === 'premium',
+      marked: i => !!i.mark,
+      'mark-red': i => i.mark === 'red',
+      'mark-yellow': i => i.mark === 'yellow',
+      'mark-green': i => i.mark === 'green',
+      'mark-blue': i => i.mark === 'blue',
     };
+    const MARKS = ['', 'red', 'yellow', 'green', 'blue'];   // tapping the dot steps through these
 
     function render() {
       const count = f => items.filter(f).length;
@@ -670,7 +690,7 @@
         return `<div class="row">
           ${iconHTML(it, 'sm')}
           <div class="row-info">
-            <div class="row-name">${esc(it.name)} ${isScheduled(it) ? `<span class="badge draft">Scheduled · ${esc(new Date(it.publish_at).toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'medium', timeStyle: 'short' }))} (SL time)</span>` : it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''} ${it.access === 'premium' ? '<span class="badge">Premium</span>' : ''}</div>
+            <div class="row-name"><button type="button" class="mark-dot" data-mark="${it.id}" data-c="${esc(it.mark || '')}" title="Colour mark: tap to change" aria-label="Colour mark"></button>${esc(it.name)} ${isScheduled(it) ? `<span class="badge draft">Scheduled · ${esc(new Date(it.publish_at).toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'medium', timeStyle: 'short' }))} (SL time)</span>` : it.status === 'draft' ? '<span class="badge draft">Draft</span>' : ''} ${it.access === 'premium' ? '<span class="badge">Premium</span>' : ''}</div>
             <div class="row-sub">${esc(meta)}</div>
             ${dl ? `<a class="row-link" href="${esc(asset(dl))}" target="_blank" rel="noopener" title="${esc(dl)}">${esc(dl.replace(/^https?:\/\//i, ''))}</a>` : '<div class="row-sub">No download link</div>'}
           </div>
@@ -692,6 +712,16 @@
       const edit = e.target.closest('[data-edit]');
       const del = e.target.closest('[data-del]');
       const acc = e.target.closest('[data-access]');
+      const dot = e.target.closest('[data-mark]');
+      if (dot) {
+        const it = items.find(i => String(i.id) === dot.dataset.mark);
+        const to = MARKS[(MARKS.indexOf(it.mark || '') + 1) % MARKS.length];
+        dot.dataset.c = to;                       // show it at once; undone below if saving fails
+        try {
+          await api('admin_set_mark', { body: { id: it.id, mark: to } });
+          it.mark = to;
+        } catch (err) { dot.dataset.c = it.mark || ''; handleError(err); }
+      }
       if (acc) {
         const it = items.find(i => String(i.id) === acc.dataset.access);
         const to = it.access === 'premium' ? 'free' : 'premium';
