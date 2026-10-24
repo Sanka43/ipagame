@@ -1873,6 +1873,40 @@ try {
             foreach ($ids as $id) $up->execute([$mark === '' ? null : $mark, $id]);
             respond(['ok' => true, 'mark' => $mark]);
 
+        // Admin: bulk change status for one or several (ids[]) games (published, draft, scheduled, review, removed)
+        case 'admin_set_status':
+            require_post();
+            require_admin();
+            $b = body();
+            $ids = array_values(array_unique(array_filter(array_map('intval', (array)($b['ids'] ?? [$b['id'] ?? 0])))));
+            if (!$ids) throw new ApiError('Pick at least one game', 422);
+            $status = (string)($b['status'] ?? '');
+            $publishAt = null;
+            if ($status === 'scheduled') {
+                $at = strtotime((string)($b['publish_at'] ?? ''));
+                if (!$at) throw new ApiError('Pick the date and time to publish', 422);
+                if ($at <= time()) throw new ApiError('The publish time must be in the future', 422);
+                if (!has_publish_at()) throw new ApiError('Scheduling needs sql/games_schedule.sql imported first', 500);
+                $realStatus = 'draft';
+                $publishAt = gmdate('Y-m-d H:i:s', $at);
+            } else {
+                if (!in_array($status, STATUSES, true)) throw new ApiError('Unknown status', 422);
+                $realStatus = $status;
+                $publishAt = null;
+            }
+            $pdo = db();
+            if (has_publish_at()) {
+                $up = $pdo->prepare('UPDATE games SET status=?, publish_at=?, updated_at=UTC_TIMESTAMP() WHERE id=?');
+                foreach ($ids as $id) $up->execute([$realStatus, $publishAt, $id]);
+            } else {
+                $up = $pdo->prepare('UPDATE games SET status=?, updated_at=UTC_TIMESTAMP() WHERE id=?');
+                foreach ($ids as $id) $up->execute([$realStatus, $id]);
+            }
+            if ($realStatus === 'published') {
+                try { mail_enqueue_due(); } catch (Throwable $e) { error_log('mail_enqueue_due: ' . $e->getMessage()); }
+            }
+            respond(['ok' => true, 'status' => $status, 'count' => count($ids)]);
+
         /* ---------- Admin: categories ---------- */
         case 'admin_categories':
             require_admin();
@@ -2075,6 +2109,20 @@ try {
             if (push_ready()) db()->prepare('DELETE FROM push_subscriptions WHERE user_id=? AND endpoint_hash=?')
                 ->execute([$me['id'], hash('sha256', (string)(body()['endpoint'] ?? ''))]);
             respond(['ok' => true]);
+
+        // Admin only: is push set up, how many phones subscribed, what the last announcement got back.
+        case 'admin_push_status':
+            require_admin();
+            $ready = push_ready();
+            $out = ['ready' => $ready, 'table' => (bool)db()->query("SHOW TABLES LIKE 'push_subscriptions'")->fetch(),
+                    'pushed_at_column' => has_column('games', 'pushed_at')];
+            if ($ready) {
+                $out['subscriptions'] = (int)db()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn();
+                $out['unpushed_published_games'] = (int)db()->query("SELECT COUNT(*) FROM games WHERE status='published' AND pushed_at IS NULL")->fetchColumn();
+                $last = db()->query("SELECT v FROM push_keys WHERE k='last'")->fetchColumn();
+                $out['last_announcement'] = $last ? json_decode($last, true) : null;
+            }
+            respond($out);
 
         /* ---------- New-app emails ---------- */
         // Member: turn the "new app" emails on or off from the account page.
