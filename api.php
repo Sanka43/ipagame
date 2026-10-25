@@ -1514,7 +1514,7 @@ function ai_generate_game_desc(array $params): array
         . ($notes !== '' ? "- Custom Features / Notes: {$notes}\n" : '')
         . "- Tone: {$tone}";
 
-    $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" . rawurlencode($model) . ":generateContent?key=" . rawurlencode($apiKey);
+    $endpointModel = $model;
 
     $payload = [
         'contents' => [
@@ -1531,36 +1531,67 @@ function ai_generate_game_desc(array $params): array
         ]
     ];
 
-    $ch = curl_init($endpoint);
-    $curlOptions = [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 40,
-        CURLOPT_SSL_VERIFYPEER => true
-    ];
+    // Try stable v1 first, then v1beta, testing model aliases if needed
+    $modelsToTry = array_values(array_unique(array_filter([$endpointModel, 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash'])));
+    $versionsToTry = ['v1', 'v1beta'];
 
-    if (defined('CURLSSLOPT_NATIVE_CA')) {
-        $curlOptions[CURLOPT_SSL_OPTIONS] = CURLSSLOPT_NATIVE_CA;
+    $lastErrorMsg = 'Failed to generate descriptions';
+    $successJson = null;
+
+    foreach ($versionsToTry as $ver) {
+        foreach ($modelsToTry as $mName) {
+            $endpoint = "https://generativelanguage.googleapis.com/{$ver}/models/" . rawurlencode($mName) . ":generateContent?key=" . rawurlencode($apiKey);
+
+            $ch = curl_init($endpoint);
+            $curlOptions = [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => json_encode($payload),
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 40,
+                CURLOPT_SSL_VERIFYPEER => true
+            ];
+
+            if (defined('CURLSSLOPT_NATIVE_CA')) {
+                $curlOptions[CURLOPT_SSL_OPTIONS] = CURLSSLOPT_NATIVE_CA;
+            }
+
+            curl_setopt_array($ch, $curlOptions);
+
+            $res = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErr = curl_error($ch);
+            curl_close($ch);
+
+            if ($res === false || $curlErr) {
+                $lastErrorMsg = "Failed to connect to Gemini API: " . ($curlErr ?: 'network timeout');
+                continue;
+            }
+
+            $json = json_decode($res, true);
+
+            // If 404 (model not supported in this API version), try next version/model
+            if ($httpCode === 404) {
+                $lastErrorMsg = $json['error']['message'] ?? "Model {$mName} not found in {$ver}";
+                continue;
+            }
+
+            // Other errors (e.g. 400 Invalid key, 429 quota) fail immediately
+            if ($httpCode >= 400 || !empty($json['error'])) {
+                $msg = $json['error']['message'] ?? ("Gemini returned HTTP " . $httpCode);
+                throw new ApiError("Gemini API error: " . $msg, 400);
+            }
+
+            $successJson = $json;
+            break 2;
+        }
     }
 
-    curl_setopt_array($ch, $curlOptions);
-
-    $res = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr = curl_error($ch);
-    curl_close($ch);
-
-    if ($res === false || $curlErr) {
-        throw new ApiError("Failed to connect to Gemini API: " . ($curlErr ?: 'network timeout'), 502);
+    if (!$successJson) {
+        throw new ApiError("Gemini API error: " . $lastErrorMsg, 400);
     }
 
-    $json = json_decode($res, true);
-    if ($httpCode >= 400 || !empty($json['error'])) {
-        $msg = $json['error']['message'] ?? ("Gemini returned HTTP " . $httpCode);
-        throw new ApiError("Gemini API error: " . $msg, 400);
-    }
+    $json = $successJson;
 
     $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
     if ($text === '') {
