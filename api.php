@@ -1469,15 +1469,15 @@ function mail_overview(): array
 }
 
 /**
- * Dynamically queries available Gemini models that support generateContent for this API key.
- * Caches in data/gemini_models.json for 1 day so it only fetches once.
+ * Dynamically queries available Gemini models that support generateContent (text) for this API key.
+ * Caches in data/gemini_text_models.json for 1 day so it only fetches once.
  */
 function gemini_available_models(string $apiKey): array
 {
     static $cached = null;
     if ($cached !== null) return $cached;
 
-    $cacheFile = __DIR__ . '/data/gemini_models.json';
+    $cacheFile = __DIR__ . '/data/gemini_text_models.json';
     if (is_file($cacheFile) && (time() - (int)@filemtime($cacheFile) < 86400)) {
         $data = json_decode((string)@file_get_contents($cacheFile), true);
         if (is_array($data) && !empty($data)) {
@@ -1504,19 +1504,28 @@ function gemini_available_models(string $apiKey): array
         $json = json_decode($res, true);
         if (!empty($json['models']) && is_array($json['models'])) {
             $flashModels = [];
+            $proModels = [];
             $otherModels = [];
             foreach ($json['models'] as $m) {
                 $methods = (array)($m['supportedGenerationMethods'] ?? []);
                 if (!in_array('generateContent', $methods, true)) continue;
                 $name = preg_replace('~^models/~', '', (string)($m['name'] ?? ''));
                 if ($name === '') continue;
+
+                // Strictly exclude non-text models (TTS, audio, images, embeddings)
+                if (preg_match('/-(tts|audio|image|embed)/i', $name)) continue;
+                if (preg_match('/(embedding|imagen|whisper|robotics)/i', $name)) continue;
+
                 if (stripos($name, 'flash') !== false) {
                     $flashModels[] = $name;
+                } elseif (stripos($name, 'pro') !== false) {
+                    $proModels[] = $name;
                 } else {
                     $otherModels[] = $name;
                 }
             }
-            $result = array_values(array_unique(array_merge($flashModels, $otherModels)));
+            // Prioritize text flash models, then pro, then other text models
+            $result = array_values(array_unique(array_merge($flashModels, $proModels, $otherModels)));
             if (!empty($result)) {
                 @file_put_contents($cacheFile, json_encode($result));
                 return $cached = $result;
@@ -1638,6 +1647,7 @@ function ai_generate_game_desc(array $params): array
 
             $isOverloaded = ($httpCode === 503 || $httpCode === 429 || stripos($errMessage, 'high demand') !== false || stripos($errMessage, 'overloaded') !== false);
             $isUnavailable = ($httpCode === 404 || ($httpCode === 400 && stripos($errMessage, 'no longer available') !== false));
+            $isModalityError = (stripos($errMessage, 'response modalities') !== false || stripos($errMessage, 'not supported by the model') !== false);
 
             if ($isOverloaded) {
                 $lastErrorMsg = "Google Gemini is currently experiencing temporary high demand worldwide. Please wait a moment and click Regenerate.";
@@ -1648,8 +1658,9 @@ function ai_generate_game_desc(array $params): array
                 break; // try next model
             }
 
-            if ($isUnavailable) {
-                $lastErrorMsg = $errMessage ?: "Model {$mName} not available";
+            // If model is non-text (audio/TTS) or unavailable, immediately skip to next model
+            if ($isUnavailable || $isModalityError) {
+                $lastErrorMsg = $errMessage ?: "Model {$mName} not compatible";
                 break; // try next model
             }
 
