@@ -65,4 +65,11 @@ return [
         'telegram' => '#',   // https://t.me/yourchannel
         'youtube' => '#',    // https://youtube.com/@yourchannel
     ],
+    // AI Assistant for Admin Panel (Google Gemini API):
+    // Get a free API key at: https://aistudio.google.com/
+    'ai' => [
+        'provider' => 'gemini',
+        'api_key' => '',             // Paste your Gemini API key here
+        'model' => 'gemini-1.5-flash',
+    ],
 ];

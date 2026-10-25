@@ -73,6 +73,16 @@
       .row-select { display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 4px; margin: 0; }
       .row-select input[type="checkbox"], .bulk-select-all input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
       @media (max-width: 479px) { .admin-list .row-actions { padding-left: 88px; } }
+
+      /* AI Assistant Box */
+      .ai-box { margin: 14px 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); overflow: hidden; transition: border-color .2s; }
+      .ai-box-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer; user-select: none; }
+      .ai-box-head:hover { background: rgba(124, 58, 237, 0.05); }
+      .ai-box-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+      .ai-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+      .ai-box-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+      .ai-spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: aiSpin .7s linear infinite; vertical-align: -2px; }
+      @keyframes aiSpin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -446,6 +456,67 @@
           <div class="field">
             <label class="label" for="f-min">Minimum iOS</label>
             <input class="input" id="f-min" name="min_ios" placeholder="e.g. 14.0" maxlength="20">
+          </div>
+        </div>
+
+        <!-- Gemini AI Assistant -->
+        <div class="ai-box" id="aiBox">
+          <div class="ai-box-head" id="aiBoxToggle">
+            <div class="ai-box-title">
+              <span class="ai-badge">✨ Gemini AI</span>
+              <span>Description Assistant</span>
+            </div>
+            <button type="button" class="btn sm ghost" id="aiToggleBtn" style="padding: 2px 10px; font-size: 12px; pointer-events: none;">Show</button>
+          </div>
+          <div class="ai-box-body" id="aiBoxContent" style="display:none">
+            <p class="muted" style="font-size: 12px; margin: 10px 0 12px; line-height: 1.5;">
+              Auto-generate short &amp; full descriptions based on the game name, category, and optional custom notes.
+            </p>
+            <div class="grid2" style="margin-bottom: 10px;">
+              <div class="field" style="margin-bottom: 0;">
+                <label class="label" for="aiTone" style="font-size: 12px;">Tone / Style</label>
+                <select class="input sm" id="aiTone" style="height: 34px; font-size: 13px;">
+                  <option value="Engaging & Exciting (App Store Style)">App Store (Standard & Catchy)</option>
+                  <option value="Gamer & High Energy">Gamer / Action Hype</option>
+                  <option value="Modded & Hacked Features Highlight">Mod Features Highlight (Unlimited coins, Unlocked, etc.)</option>
+                  <option value="Clean & Minimal">Clean & Minimal</option>
+                </select>
+              </div>
+              <div class="field" style="margin-bottom: 0;">
+                <label class="label" for="aiNotes" style="font-size: 12px;">Custom Notes / Features (Optional)</label>
+                <input class="input sm" id="aiNotes" style="height: 34px; font-size: 13px;" placeholder="e.g. Unlimited Coins, 60 FPS, iOS 14+">
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
+              <button type="button" class="btn sm" id="btnAiGenerate" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: 0; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                <span id="aiSpin" class="ai-spin" style="display: none;"></span>
+                <span id="aiBtnText">✨ Generate Descriptions</span>
+              </button>
+              <span id="aiStatus" class="muted" style="font-size: 12px;"></span>
+            </div>
+
+            <!-- Generated Previews -->
+            <div id="aiResultBox" style="display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+              <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label class="label" style="font-size: 12px; margin: 0; font-weight: 600;">Short Description (<span id="aiShortCount">0</span>/200)</label>
+                  <button type="button" class="btn sm ghost" id="btnApplyShort" style="font-size: 11px; padding: 2px 8px;">Apply to Short</button>
+                </div>
+                <textarea class="input" id="aiPreviewShort" rows="2" style="font-size: 13px;"></textarea>
+              </div>
+
+              <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label class="label" style="font-size: 12px; margin: 0; font-weight: 600;">Full Description (Markdown)</label>
+                  <button type="button" class="btn sm ghost" id="btnApplyFull" style="font-size: 11px; padding: 2px 8px;">Apply to Full</button>
+                </div>
+                <textarea class="input" id="aiPreviewFull" rows="6" style="font-size: 13px; font-family: monospace;"></textarea>
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button type="button" class="btn sm primary" id="btnApplyBoth" style="font-weight: 600;">✓ Apply Both to Form</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1190,6 +1261,7 @@
 
     function openEditor(it) {
       form.reset();
+      resetAiBox();
       $('#editError').textContent = '';
       $('#versions').innerHTML = '';
       $('#editorTitle').textContent = it ? 'Edit ' + it.name : 'Add game';
@@ -1296,6 +1368,100 @@
       } finally {
         btn.disabled = false;
       }
+    });
+
+    /* ---------- Gemini AI Assistant ---------- */
+    function resetAiBox() {
+      $('#aiNotes').value = '';
+      $('#aiResultBox').style.display = 'none';
+      $('#aiPreviewShort').value = '';
+      $('#aiPreviewFull').value = '';
+      $('#aiShortCount').textContent = '0';
+      $('#aiStatus').textContent = '';
+      $('#aiStatus').style.color = '';
+      $('#btnAiGenerate').disabled = false;
+      $('#aiSpin').style.display = 'none';
+      $('#aiBtnText').textContent = '✨ Generate Descriptions';
+    }
+
+    const aiBoxToggle = $('#aiBoxToggle');
+    const aiBoxContent = $('#aiBoxContent');
+    const aiToggleBtn = $('#aiToggleBtn');
+    aiBoxToggle.addEventListener('click', () => {
+      const open = aiBoxContent.style.display !== 'none';
+      aiBoxContent.style.display = open ? 'none' : 'block';
+      aiToggleBtn.textContent = open ? 'Show' : 'Hide';
+    });
+
+    const aiShortPreview = $('#aiPreviewShort');
+    aiShortPreview.addEventListener('input', () => {
+      $('#aiShortCount').textContent = aiShortPreview.value.length;
+    });
+
+    $('#btnAiGenerate').addEventListener('click', async () => {
+      const f = form.elements;
+      const name = f.name.value.trim();
+      if (!name) {
+        f.name.focus();
+        return toast('Enter the game name first', true);
+      }
+      const type = f.type.value;
+      const category = f.category.value;
+      const developer = f.developer.value;
+      const notes = $('#aiNotes').value.trim();
+      const tone = $('#aiTone').value;
+
+      const btn = $('#btnAiGenerate');
+      const spin = $('#aiSpin');
+      const text = $('#aiBtnText');
+      const status = $('#aiStatus');
+      const resultBox = $('#aiResultBox');
+
+      btn.disabled = true;
+      spin.style.display = 'inline-block';
+      text.textContent = 'Generating...';
+      status.textContent = 'Contacting Gemini AI...';
+      status.style.color = 'var(--muted)';
+
+      try {
+        const res = await api('admin_ai_generate', {
+          body: { name, type, category, developer, notes, tone }
+        });
+        if (!res || !res.description) {
+          throw new Error('AI did not return descriptions');
+        }
+        $('#aiPreviewShort').value = res.short_description || '';
+        $('#aiPreviewFull').value = res.description || '';
+        $('#aiShortCount').textContent = (res.short_description || '').length;
+        resultBox.style.display = 'block';
+        status.textContent = 'Descriptions generated!';
+        status.style.color = 'var(--ok)';
+        toast('AI descriptions generated');
+      } catch (err) {
+        status.textContent = err.message || 'Generation failed';
+        status.style.color = 'var(--danger)';
+        handleError(err);
+      } finally {
+        btn.disabled = false;
+        spin.style.display = 'none';
+        text.textContent = '✨ Regenerate';
+      }
+    });
+
+    $('#btnApplyShort').addEventListener('click', () => {
+      form.elements.short_description.value = $('#aiPreviewShort').value.trim();
+      toast('Short description applied');
+    });
+
+    $('#btnApplyFull').addEventListener('click', () => {
+      form.elements.description.value = $('#aiPreviewFull').value.trim();
+      toast('Full description applied');
+    });
+
+    $('#btnApplyBoth').addEventListener('click', () => {
+      form.elements.short_description.value = $('#aiPreviewShort').value.trim();
+      form.elements.description.value = $('#aiPreviewFull').value.trim();
+      toast('Descriptions applied to form!');
     });
 
     const PANES = ['games', 'categories', 'users', 'downloads', 'payments', 'emails', 'support'];

@@ -40,6 +40,8 @@ define('SOCIAL', array_filter(array_map(
 define('GOOGLE_CLIENT_ID', trim((string)($config['google_client_id'] ?? '')));
 // Payment gateway (code in payments/): which driver, currency, the one-time VIP price and each gateway's keys. See config.example.php and payments/README.md.
 define('PAYMENTS', (array)($config['payments'] ?? []) + ['gateway' => '', 'currency' => 'USD', 'vip_price' => 10, 'gateways' => []]);
+// AI Assistant (Google Gemini) configuration for admin descriptions
+define('AI_CONFIG', (array)($config['ai'] ?? []));
 require __DIR__ . '/mailer.php';
 require __DIR__ . '/payments/payments.php';
 
@@ -1466,6 +1468,126 @@ function mail_overview(): array
     ];
 }
 
+/**
+ * Uses Google Gemini API to generate a short description and rich formatted description
+ * tailored to the store's Markdown renderer.
+ */
+function ai_generate_game_desc(array $params): array
+{
+    $ai = (array)AI_CONFIG;
+    $apiKey = trim((string)($ai['api_key'] ?? ''));
+    if ($apiKey === '') {
+        throw new ApiError("Gemini API key is missing. Please add 'ai' => ['api_key' => 'YOUR_KEY'] to config.php", 400);
+    }
+
+    $model = trim((string)($ai['model'] ?? 'gemini-1.5-flash'));
+    if ($model === '') $model = 'gemini-1.5-flash';
+
+    $name = trim((string)($params['name'] ?? ''));
+    if ($name === '') {
+        throw new ApiError("Game / App name is required to generate descriptions", 422);
+    }
+    $type = trim((string)($params['type'] ?? 'game'));
+    $category = trim((string)($params['category'] ?? ''));
+    $developer = trim((string)($params['developer'] ?? ''));
+    $notes = trim((string)($params['notes'] ?? ''));
+    $tone = trim((string)($params['tone'] ?? 'Engaging & Exciting'));
+
+    $systemInstruction = "You are a professional copywriter for 'IPA Game Store', an iOS app and game repository.\n"
+        . "Generate an attractive, high-converting short description and a rich detailed description for an iOS item.\n\n"
+        . "OUTPUT FORMAT RULES:\n"
+        . "1. You must respond with a valid JSON object containing exactly two keys: 'short_description' and 'description'.\n"
+        . "2. 'short_description': Plain text, maximum 180 characters, no markdown, punchy single sentence suitable for store cards.\n"
+        . "3. 'description': Detailed description formatted strictly with the store's supported markdown rules:\n"
+        . "   - Main headings must start with '# ' (e.g. # Overview, # Key Features, # What's Inside)\n"
+        . "   - Sub-headings must start with '## ' (e.g. ## Gameplay Experience)\n"
+        . "   - Bold text must use single asterisks *like this* (or **bold**)\n"
+        . "   - Italic text must use underscores _like this_\n"
+        . "   - Bullet points must start with '- ' (hyphen followed by a space)\n"
+        . "   - Leave a blank line between paragraphs and sections.\n"
+        . "   - Do not include HTML tags.\n\n"
+        . "Item Information:\n"
+        . "- Name: {$name}\n"
+        . "- Type: {$type}\n"
+        . ($category !== '' ? "- Category: {$category}\n" : '')
+        . ($developer !== '' ? "- Developer: {$developer}\n" : '')
+        . ($notes !== '' ? "- Custom Features / Notes: {$notes}\n" : '')
+        . "- Tone: {$tone}";
+
+    $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" . rawurlencode($model) . ":generateContent?key=" . rawurlencode($apiKey);
+
+    $payload = [
+        'contents' => [
+            [
+                'role' => 'user',
+                'parts' => [
+                    ['text' => $systemInstruction]
+                ]
+            ]
+        ],
+        'generationConfig' => [
+            'temperature' => 0.7,
+            'responseMimeType' => 'application/json'
+        ]
+    ];
+
+    $ch = curl_init($endpoint);
+    $curlOptions = [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 40,
+        CURLOPT_SSL_VERIFYPEER => true
+    ];
+
+    if (defined('CURLSSLOPT_NATIVE_CA')) {
+        $curlOptions[CURLOPT_SSL_OPTIONS] = CURLSSLOPT_NATIVE_CA;
+    }
+
+    curl_setopt_array($ch, $curlOptions);
+
+    $res = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($res === false || $curlErr) {
+        throw new ApiError("Failed to connect to Gemini API: " . ($curlErr ?: 'network timeout'), 502);
+    }
+
+    $json = json_decode($res, true);
+    if ($httpCode >= 400 || !empty($json['error'])) {
+        $msg = $json['error']['message'] ?? ("Gemini returned HTTP " . $httpCode);
+        throw new ApiError("Gemini API error: " . $msg, 400);
+    }
+
+    $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+    if ($text === '') {
+        throw new ApiError("Gemini returned an empty response", 502);
+    }
+
+    $clean = trim($text);
+    if (preg_match('/^```(?:json)?\s*([\s\S]*?)\s*```$/i', $clean, $m)) {
+        $clean = trim($m[1]);
+    }
+
+    $data = json_decode($clean, true);
+    if (!is_array($data)) {
+        throw new ApiError("Unable to parse Gemini output as JSON", 502);
+    }
+
+    $shortDesc = trim((string)($data['short_description'] ?? ''));
+    if (mb_strlen($shortDesc) > 200) {
+        $shortDesc = mb_substr($shortDesc, 0, 197) . '...';
+    }
+
+    return [
+        'short_description' => $shortDesc,
+        'description' => trim((string)($data['description'] ?? ''))
+    ];
+}
+
 if (PHP_SAPI === 'cli' || defined('API_LIB')) return;   // publish_scheduled.php and payments/test_pay.php only need the functions above
 
 // New releases are pushed to phones after the response has gone out, so saving a game never waits on it.
@@ -1804,6 +1926,12 @@ try {
             $_SESSION = [];
             session_destroy();
             respond(['ok' => true]);
+
+        // Admin: generate short and full description via Gemini AI
+        case 'admin_ai_generate':
+            require_post();
+            require_admin();
+            respond(ai_generate_game_desc(body()));
 
         case 'save':
             require_post();
