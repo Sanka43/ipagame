@@ -1469,6 +1469,65 @@ function mail_overview(): array
 }
 
 /**
+ * Dynamically queries available Gemini models that support generateContent for this API key.
+ * Caches in data/gemini_models.json for 1 day so it only fetches once.
+ */
+function gemini_available_models(string $apiKey): array
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    $cacheFile = __DIR__ . '/data/gemini_models.json';
+    if (is_file($cacheFile) && (time() - (int)@filemtime($cacheFile) < 86400)) {
+        $data = json_decode((string)@file_get_contents($cacheFile), true);
+        if (is_array($data) && !empty($data)) {
+            return $cached = $data;
+        }
+    }
+
+    $url = "https://generativelanguage.googleapis.com/v1beta/models?key=" . rawurlencode($apiKey);
+    $ch = curl_init($url);
+    $curlOptions = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_SSL_VERIFYPEER => true
+    ];
+    if (defined('CURLSSLOPT_NATIVE_CA')) {
+        $curlOptions[CURLOPT_SSL_OPTIONS] = CURLSSLOPT_NATIVE_CA;
+    }
+    curl_setopt_array($ch, $curlOptions);
+    $res = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 && $res) {
+        $json = json_decode($res, true);
+        if (!empty($json['models']) && is_array($json['models'])) {
+            $flashModels = [];
+            $otherModels = [];
+            foreach ($json['models'] as $m) {
+                $methods = (array)($m['supportedGenerationMethods'] ?? []);
+                if (!in_array('generateContent', $methods, true)) continue;
+                $name = preg_replace('~^models/~', '', (string)($m['name'] ?? ''));
+                if ($name === '') continue;
+                if (stripos($name, 'flash') !== false) {
+                    $flashModels[] = $name;
+                } else {
+                    $otherModels[] = $name;
+                }
+            }
+            $result = array_values(array_unique(array_merge($flashModels, $otherModels)));
+            if (!empty($result)) {
+                @file_put_contents($cacheFile, json_encode($result));
+                return $cached = $result;
+            }
+        }
+    }
+
+    return ['gemini-3.8-flash'];
+}
+
+/**
  * Uses Google Gemini API to generate a short description and rich formatted description
  * tailored to the store's Markdown renderer.
  */
@@ -1533,25 +1592,21 @@ function ai_generate_game_desc(array $params): array
         ]
     ];
 
-    // Try stable v1 first, then v1beta, testing current Gemini models with fallback
-    $modelsToTry = array_values(array_unique(array_filter([
-        $endpointModel,
-        'gemini-3.8-flash',
-        'gemini-2.5-flash',
-        'gemini-3.8-flash-lite',
-        'gemini-2.5-flash-lite',
-        'gemini-3.0-flash',
-        'gemini-1.5-flash',
-    ])));
-    $versionsToTry = ['v1', 'v1beta'];
+    // Discover active models dynamically from Google for this key
+    $discovered = gemini_available_models($apiKey);
+    $modelsToTry = array_values(array_unique(array_filter(array_merge(
+        [$endpointModel],
+        $discovered
+    ))));
 
     $lastErrorMsg = 'Failed to generate descriptions';
     $successJson = null;
 
-    foreach ($versionsToTry as $ver) {
-        foreach ($modelsToTry as $mName) {
-            $endpoint = "https://generativelanguage.googleapis.com/{$ver}/models/" . rawurlencode($mName) . ":generateContent?key=" . rawurlencode($apiKey);
+    foreach ($modelsToTry as $mName) {
+        $endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" . rawurlencode($mName) . ":generateContent?key=" . rawurlencode($apiKey);
 
+        // Attempt up to 2 times per model with backoff if high demand
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
             $ch = curl_init($endpoint);
             $curlOptions = [
                 CURLOPT_POST => true,
@@ -1575,7 +1630,7 @@ function ai_generate_game_desc(array $params): array
 
             if ($res === false || $curlErr) {
                 $lastErrorMsg = "Failed to connect to Gemini API: " . ($curlErr ?: 'network timeout');
-                continue;
+                break;
             }
 
             $json = json_decode($res, true);
@@ -1584,14 +1639,20 @@ function ai_generate_game_desc(array $params): array
             $isOverloaded = ($httpCode === 503 || $httpCode === 429 || stripos($errMessage, 'high demand') !== false || stripos($errMessage, 'overloaded') !== false);
             $isUnavailable = ($httpCode === 404 || ($httpCode === 400 && stripos($errMessage, 'no longer available') !== false));
 
-            // If model is busy (503/high demand) or unavailable (404), seamlessly try next model
-            if ($isUnavailable || $isOverloaded) {
-                $lastErrorMsg = $errMessage ?: "Model {$mName} busy or unavailable in {$ver}";
-                if ($isOverloaded) usleep(500000); // 0.5s pause
-                continue;
+            if ($isOverloaded) {
+                $lastErrorMsg = "Google Gemini is currently experiencing temporary high demand worldwide. Please wait a moment and click Regenerate.";
+                if ($attempt === 1) {
+                    usleep(1500000); // 1.5s backoff before retry
+                    continue;
+                }
+                break; // try next model
             }
 
-            // Other errors (e.g. invalid key) fail immediately
+            if ($isUnavailable) {
+                $lastErrorMsg = $errMessage ?: "Model {$mName} not available";
+                break; // try next model
+            }
+
             if ($httpCode >= 400 || !empty($json['error'])) {
                 $msg = $errMessage ?: ("Gemini returned HTTP " . $httpCode);
                 throw new ApiError("Gemini API error: " . $msg, 400);
