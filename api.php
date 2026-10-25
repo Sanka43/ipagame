@@ -1480,8 +1480,10 @@ function ai_generate_game_desc(array $params): array
         throw new ApiError("Gemini API key is missing. Please add 'ai' => ['api_key' => 'YOUR_KEY'] to config.php", 400);
     }
 
-    $model = trim((string)($ai['model'] ?? 'gemini-1.5-flash'));
-    if ($model === '') $model = 'gemini-1.5-flash';
+    $model = trim((string)($ai['model'] ?? 'gemini-3.8-flash'));
+    if ($model === '' || $model === 'gemini-1.5-flash' || $model === 'gemini-2.0-flash') {
+        $model = 'gemini-3.8-flash';
+    }
 
     $name = trim((string)($params['name'] ?? ''));
     if ($name === '') {
@@ -1531,8 +1533,12 @@ function ai_generate_game_desc(array $params): array
         ]
     ];
 
-    // Try stable v1 first, then v1beta, testing model aliases if needed
-    $modelsToTry = array_values(array_unique(array_filter([$endpointModel, 'gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash'])));
+    // Try stable v1 first, then v1beta, testing current Gemini models
+    $modelsToTry = array_values(array_unique(array_filter([
+        $endpointModel,
+        'gemini-3.8-flash',
+        'gemini-2.5-flash',
+    ])));
     $versionsToTry = ['v1', 'v1beta'];
 
     $lastErrorMsg = 'Failed to generate descriptions';
@@ -1569,16 +1575,17 @@ function ai_generate_game_desc(array $params): array
             }
 
             $json = json_decode($res, true);
+            $errMessage = (string)($json['error']['message'] ?? '');
 
-            // If 404 (model not supported in this API version), try next version/model
-            if ($httpCode === 404) {
-                $lastErrorMsg = $json['error']['message'] ?? "Model {$mName} not found in {$ver}";
+            // If 404 (model not supported) or retired model ("no longer available"), try next model/version
+            if ($httpCode === 404 || ($httpCode === 400 && stripos($errMessage, 'no longer available') !== false)) {
+                $lastErrorMsg = $errMessage ?: "Model {$mName} not available in {$ver}";
                 continue;
             }
 
-            // Other errors (e.g. 400 Invalid key, 429 quota) fail immediately
+            // Other errors (e.g. invalid key, quota exceeded) fail immediately
             if ($httpCode >= 400 || !empty($json['error'])) {
-                $msg = $json['error']['message'] ?? ("Gemini returned HTTP " . $httpCode);
+                $msg = $errMessage ?: ("Gemini returned HTTP " . $httpCode);
                 throw new ApiError("Gemini API error: " . $msg, 400);
             }
 
