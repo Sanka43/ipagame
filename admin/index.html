@@ -135,30 +135,43 @@
         </button>
       </div>
       <div class="toolbar g-filters">
-        <select class="input u-filter" id="gFilter" aria-label="Filter by type or status">
-          <option value="">All</option>
+        <select class="input u-filter" id="gType" aria-label="Filter by type">
+          <option value="">All types</option>
           <option value="game">Games</option>
           <option value="app">Apps</option>
+        </select>
+        <select class="input u-filter" id="gStatus" aria-label="Filter by status">
+          <option value="">All status</option>
           <option value="published">Published</option>
           <option value="draft">Drafts</option>
           <option value="scheduled">Scheduled</option>
+          <option value="review">Review</option>
+          <option value="removed">Removed</option>
+        </select>
+        <select class="input u-filter" id="gAccess" aria-label="Filter by access">
+          <option value="">Free &amp; Paid</option>
           <option value="free">Free</option>
-          <option value="premium">Premium</option>
-          <option value="nolink">No download link</option>
-          <option value="marked">Marked (any colour)</option>
-          <option value="mark-red">Marked red</option>
-          <option value="mark-yellow">Marked yellow</option>
-          <option value="mark-green">Marked green</option>
-          <option value="mark-blue">Marked blue</option>
+          <option value="premium">Paid (Premium)</option>
+        </select>
+        <select class="input u-filter" id="gMark" aria-label="Filter by colour mark">
+          <option value="">All markers</option>
+          <option value="marked">Any marker</option>
+          <option value="red">🔴 Red</option>
+          <option value="yellow">🟡 Yellow</option>
+          <option value="green">🟢 Green</option>
+          <option value="blue">🔵 Blue</option>
+          <option value="unmarked">⚪ No mark</option>
         </select>
         <select class="input u-filter" id="gSource" aria-label="Filter by download source">
           <option value="">IPA &amp; App Store</option>
           <option value="ipa">IPA</option>
           <option value="store">App Store</option>
+          <option value="nolink">No download link</option>
         </select>
         <select class="input u-filter" id="gCat" aria-label="Filter by category">
           <option value="">All categories</option>
         </select>
+        <button type="button" class="btn sm ghost" id="resetFiltersBtn" title="Reset all filters" style="height:36px;padding:0 12px;font-size:13px;display:none;">Reset</button>
         <span class="muted g-count" id="gCount"></span>
       </div>
 
@@ -709,23 +722,49 @@
       } catch (err) { handleError(err); }
     }
 
-    const GAME_FILTERS = {
-      '': () => true,
-      game: i => i.type === 'game',
-      app: i => i.type === 'app',
-      published: i => i.status !== 'draft',
-      draft: i => i.status === 'draft' && !i.publish_at,
-      scheduled: isScheduled,
-      nolink: i => !i.download_url,
-      free: i => i.access !== 'premium',
-      premium: i => i.access === 'premium',
-      marked: i => !!i.mark,
-      'mark-red': i => i.mark === 'red',
-      'mark-yellow': i => i.mark === 'yellow',
-      'mark-green': i => i.mark === 'green',
-      'mark-blue': i => i.mark === 'blue',
-    };
     const MARKS = ['', 'red', 'yellow', 'green', 'blue'];   // tapping the dot steps through these
+
+    function getVisibleGames() {
+      const q = $('#q').value.trim().toLowerCase();
+      const type = $('#gType')?.value || '';
+      const status = $('#gStatus')?.value || '';
+      const access = $('#gAccess')?.value || '';
+      const mark = $('#gMark')?.value || '';
+      const source = $('#gSource')?.value || '';
+      const cat = $('#gCat')?.value || '';
+
+      return items.filter(i => {
+        if (q && ![i.name, i.developer, i.category].join(' ').toLowerCase().includes(q)) return false;
+        if (type && i.type !== type) return false;
+        if (status) {
+          if (status === 'published') {
+            if (i.status === 'draft' || isScheduled(i)) return false;
+          } else if (status === 'draft') {
+            if (i.status !== 'draft' || i.publish_at) return false;
+          } else if (status === 'scheduled') {
+            if (!isScheduled(i)) return false;
+          } else if (i.status !== status) {
+            return false;
+          }
+        }
+        if (access) {
+          if (access === 'free' && i.access === 'premium') return false;
+          if (access === 'premium' && i.access !== 'premium') return false;
+        }
+        if (mark) {
+          if (mark === 'marked' && !i.mark) return false;
+          if (mark === 'unmarked' && !!i.mark) return false;
+          if (mark !== 'marked' && mark !== 'unmarked' && i.mark !== mark) return false;
+        }
+        if (source) {
+          if (source === 'ipa' && !i.ipa) return false;
+          if (source === 'store' && (i.ipa || !i.download_url)) return false;
+          if (source === 'nolink' && !!i.download_url) return false;
+        }
+        if (cat && (i.category || '-') !== cat) return false;
+        return true;
+      });
+    }
 
     function render() {
       const count = f => items.filter(f).length;
@@ -738,12 +777,11 @@
         ['Scheduled', count(isScheduled)],
       ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
 
-      const q = $('#q').value.trim().toLowerCase();
-      const kind = GAME_FILTERS[$('#gFilter').value];
-      const cat = $('#gCat').value;
-      const source = $('#gSource').value;
-      const list = items.filter(i => kind(i) && (!source || (source === 'ipa' ? i.ipa : !i.ipa && !!i.download_url)) && (!cat || (i.category || '-') === cat) &&
-        (!q || [i.name, i.developer, i.category].join(' ').toLowerCase().includes(q)));
+      const hasFilter = Boolean($('#q').value.trim() || $('#gType')?.value || $('#gStatus')?.value || $('#gAccess')?.value || $('#gMark')?.value || $('#gSource')?.value || $('#gCat')?.value);
+      const resetBtn = $('#resetFiltersBtn');
+      if (resetBtn) resetBtn.style.display = hasFilter ? '' : 'none';
+
+      const list = getVisibleGames();
       $('#gCount').textContent = list.length === items.length ? '' : `${list.length} of ${items.length}`;
       $('#list').innerHTML = list.length ? list.map(it => {
         const n = it.versions_count || 0;
@@ -771,9 +809,22 @@
     }
 
     $('#q').addEventListener('input', render);
-    $('#gFilter').addEventListener('change', render);
-    $('#gCat').addEventListener('change', render);
+    $('#gType').addEventListener('change', render);
+    $('#gStatus').addEventListener('change', render);
+    $('#gAccess').addEventListener('change', render);
+    $('#gMark').addEventListener('change', render);
     $('#gSource').addEventListener('change', render);
+    $('#gCat').addEventListener('change', render);
+    $('#resetFiltersBtn').addEventListener('click', () => {
+      $('#q').value = '';
+      $('#gType').value = '';
+      $('#gStatus').value = '';
+      $('#gAccess').value = '';
+      $('#gMark').value = '';
+      $('#gSource').value = '';
+      $('#gCat').value = '';
+      render();
+    });
 
     $('#list').addEventListener('click', async e => {
       const edit = e.target.closest('[data-edit]');
@@ -820,15 +871,6 @@
     });
 
     /* ---------- Bulk selection & actions ---------- */
-    function getVisibleGames() {
-      const q = $('#q').value.trim().toLowerCase();
-      const kind = GAME_FILTERS[$('#gFilter').value];
-      const cat = $('#gCat').value;
-      const source = $('#gSource').value;
-      return items.filter(i => kind(i) && (!source || (source === 'ipa' ? i.ipa : !i.ipa && !!i.download_url)) && (!cat || (i.category || '-') === cat) &&
-        (!q || [i.name, i.developer, i.category].join(' ').toLowerCase().includes(q)));
-    }
-
     function updateBulkUI(visibleList) {
       const vList = visibleList || getVisibleGames();
       const selectAll = $('#selectAllGames');
