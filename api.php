@@ -1533,11 +1533,15 @@ function ai_generate_game_desc(array $params): array
         ]
     ];
 
-    // Try stable v1 first, then v1beta, testing current Gemini models
+    // Try stable v1 first, then v1beta, testing current Gemini models with fallback
     $modelsToTry = array_values(array_unique(array_filter([
         $endpointModel,
         'gemini-3.8-flash',
         'gemini-2.5-flash',
+        'gemini-3.8-flash-lite',
+        'gemini-2.5-flash-lite',
+        'gemini-3.0-flash',
+        'gemini-1.5-flash',
     ])));
     $versionsToTry = ['v1', 'v1beta'];
 
@@ -1577,13 +1581,17 @@ function ai_generate_game_desc(array $params): array
             $json = json_decode($res, true);
             $errMessage = (string)($json['error']['message'] ?? '');
 
-            // If 404 (model not supported) or retired model ("no longer available"), try next model/version
-            if ($httpCode === 404 || ($httpCode === 400 && stripos($errMessage, 'no longer available') !== false)) {
-                $lastErrorMsg = $errMessage ?: "Model {$mName} not available in {$ver}";
+            $isOverloaded = ($httpCode === 503 || $httpCode === 429 || stripos($errMessage, 'high demand') !== false || stripos($errMessage, 'overloaded') !== false);
+            $isUnavailable = ($httpCode === 404 || ($httpCode === 400 && stripos($errMessage, 'no longer available') !== false));
+
+            // If model is busy (503/high demand) or unavailable (404), seamlessly try next model
+            if ($isUnavailable || $isOverloaded) {
+                $lastErrorMsg = $errMessage ?: "Model {$mName} busy or unavailable in {$ver}";
+                if ($isOverloaded) usleep(500000); // 0.5s pause
                 continue;
             }
 
-            // Other errors (e.g. invalid key, quota exceeded) fail immediately
+            // Other errors (e.g. invalid key) fail immediately
             if ($httpCode >= 400 || !empty($json['error'])) {
                 $msg = $errMessage ?: ("Gemini returned HTTP " . $httpCode);
                 throw new ApiError("Gemini API error: " . $msg, 400);
