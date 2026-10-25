@@ -1478,7 +1478,6 @@ register_shutdown_function(function () {
 try {
     switch ($_GET['action'] ?? '') {
         case 'list':
-            require_member();
             $all = is_admin() && !empty($_GET['all']);
             // No page param: the admin panel's list.
             if (!isset($_GET['page'])) {
@@ -1546,7 +1545,6 @@ try {
             ]);
 
         case 'get':
-            require_member();
             $id = isset($_GET['id']) ? (int)$_GET['id'] : null;
             $slug = isset($_GET['slug']) ? (string)$_GET['slug'] : null;
             $item = find_item($id, $slug);
