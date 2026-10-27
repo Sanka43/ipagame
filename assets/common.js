@@ -2,6 +2,52 @@
 // Pages in sub-folders set window.API_BASE (e.g. '../') before loading this file.
 const BASE = window.API_BASE || '';
 
+const IN_APP = /IPAGameApp/.test(navigator.userAgent) || Boolean(window.webkit?.messageHandlers?.googleSignIn);
+const ON_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_STANDALONE = Boolean(window.navigator?.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
+const IS_APP = IN_APP || IS_STANDALONE;
+
+function isPublicPage() {
+  const p = location.pathname.toLowerCase();
+  return p.endsWith('account.html') ||
+         p.endsWith('privacy.html') ||
+         p.endsWith('terms.html') ||
+         p.endsWith('install.html') ||
+         Boolean(document.body?.classList.contains('auth-page')) ||
+         Boolean(document.body?.classList.contains('admin-page'));
+}
+
+// Require authentication before accessing the store (Web & App).
+function enforceAuth() {
+  if (isPublicPage()) return;
+
+  const authState = localStorage.getItem('me_active');
+  if (authState === '0') {
+    location.replace(loginUrl());
+    return;
+  }
+
+  if (authState !== '1') {
+    api('me').then(r => {
+      if (r && r.user) {
+        try { localStorage.setItem('me_active', '1'); } catch {}
+        document.documentElement.classList.remove('auth-pending');
+      } else {
+        try { localStorage.setItem('me_active', '0'); } catch {}
+        location.replace(loginUrl());
+      }
+    }).catch(err => {
+      if (err && err.status === 401) {
+        try { localStorage.setItem('me_active', '0'); } catch {}
+        location.replace(loginUrl());
+      } else {
+        document.documentElement.classList.remove('auth-pending');
+      }
+    });
+  }
+}
+enforceAuth();
+
 async function api(action, opts = {}) {
   const url = new URL(BASE + 'api.php', location.href);
   url.searchParams.set('action', action);
@@ -24,7 +70,8 @@ async function api(action, opts = {}) {
   } catch {
     throw new Error(`Server error (${res.status})`);
   }
-  if (res.status === 401 && document.body.dataset.auth === 'required') {
+  if (res.status === 401 && (document.body.dataset.auth === 'required' || !isPublicPage())) {
+    try { localStorage.setItem('me_active', '0'); } catch {}
     location.replace(loginUrl());
     return new Promise(() => {});              // page is leaving; keep skeletons instead of an error
   }
@@ -135,8 +182,6 @@ const TABS = [
 ];
 
 // ---- Installed games (iPhone / iPad: the app, Safari, the home-screen icon): remembered on this device; games run through LiveContainer. ----
-const IN_APP = /IPAGameApp/.test(navigator.userAgent);
-const ON_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const INST_KEY = 'ipa-installed-list';
 
 // lc: 2 marks a LiveContainer folder name ("<bundle id>.app") read the current way; older saved names were wrong, so they are dropped.
@@ -248,12 +293,27 @@ function mountAccountButton() {
   api('me').then(r => {
     if (!r.user) {                                // signed out elsewhere: drop the remembered picture
       btn.innerHTML = '';
-      try { sessionStorage.removeItem('me'); } catch {}
+      try {
+        sessionStorage.removeItem('me');
+        localStorage.setItem('me_active', '0');
+      } catch {}
+      if (!isPublicPage()) {
+        location.replace(loginUrl());
+        return;
+      }
       return;
     }
     fill(r.user);
-    try { sessionStorage.setItem('me', JSON.stringify({ username: r.user.username, avatar: r.user.avatar })); } catch {}
-  }).catch(() => {});
+    try {
+      localStorage.setItem('me_active', '1');
+      sessionStorage.setItem('me', JSON.stringify({ username: r.user.username, avatar: r.user.avatar }));
+    } catch {}
+  }).catch(err => {
+    if (err && err.status === 401 && !isPublicPage()) {
+      try { localStorage.setItem('me_active', '0'); } catch {}
+      location.replace(loginUrl());
+    }
+  });
 }
 
 function fmtSize(mb) {

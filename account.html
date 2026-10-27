@@ -12,6 +12,13 @@
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="assets/style.css?v=20261013b">
+  <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "z44ygem4ph");
+  </script>
 </head>
 <body class="auth-page">
   <div class="arcade-wall" aria-hidden="true"><div class="wall-rows" id="wall"></div></div>
@@ -469,6 +476,7 @@
       if (!login || !password) throw new Error('Enter your username and password.');
       const r = await api('user_login', { body: { login, password } });
       if (r.verify) return showVerify(r);
+      try { localStorage.setItem('me_active', '1'); } catch {}
       goBack();
     }));
 
@@ -545,6 +553,7 @@
         $('#code').focus();
         throw err;
       }
+      try { localStorage.setItem('me_active', '1'); } catch {}
       goBack();
     }));
 
@@ -564,6 +573,7 @@
 
     $('#switchAccount').addEventListener('click', async () => {
       try { await api('user_logout', { body: {} }); } catch {}
+      forgetMe();
       setView('login');
       $('#loginId').focus();
     });
@@ -602,6 +612,7 @@
         throw err;
       }
       toast('Password changed');
+      try { localStorage.setItem('me_active', '1'); } catch {}
       goBack();
     }));
 
@@ -618,9 +629,17 @@
     });
 
     // The avatar the store pages remember for this tab (see mountAccountButton in common.js).
-    const forgetMe = () => { try { sessionStorage.removeItem('me'); } catch {} };
+    const forgetMe = () => {
+      try {
+        sessionStorage.removeItem('me');
+        localStorage.setItem('me_active', '0');
+      } catch {}
+    };
     function rememberMe(u) {
-      try { sessionStorage.setItem('me', JSON.stringify({ username: u.username, avatar: u.avatar })); } catch {}
+      try {
+        sessionStorage.setItem('me', JSON.stringify({ username: u.username, avatar: u.avatar }));
+        localStorage.setItem('me_active', '1');
+      } catch {}
     }
 
     // ---- Profile photo ----
@@ -717,6 +736,7 @@
       errEl.textContent = '';
       try {
         await api('google_login', { body: nonce ? { credential, nonce } : { credential } });
+        try { localStorage.setItem('me_active', '1'); } catch {}
         goBack();
       } catch (err) {
         errEl.textContent = err.message;
@@ -761,12 +781,24 @@
     api('me')
       .then(r => {
         setupGoogle(r.google_client_id);
-        if (r.user && next) goBack();
-        else if (r.user) showProfile(r.user);
-        else if (r.pending) showVerify(r.pending);
-        else setView(new URLSearchParams(location.search).has('register') ? 'register' : 'login');
+        if (r.user && next) {
+          try { localStorage.setItem('me_active', '1'); } catch {}
+          goBack();
+        } else if (r.user) {
+          try { localStorage.setItem('me_active', '1'); } catch {}
+          showProfile(r.user);
+        } else if (r.pending) {
+          try { localStorage.setItem('me_active', '0'); } catch {}
+          showVerify(r.pending);
+        } else {
+          try { localStorage.setItem('me_active', '0'); } catch {}
+          setView(new URLSearchParams(location.search).has('register') ? 'register' : 'login');
+        }
       })
-      .catch(() => setView('login'));
+      .catch(() => {
+        try { localStorage.setItem('me_active', '0'); } catch {}
+        setView('login');
+      });
   </script>
 </body>
 </html>
