@@ -1183,6 +1183,19 @@ function matches_filters(array $i, string $type, string $cat, string $q, string 
 
 /* ---------- Support chat (tables in sql/support_chat.sql) ---------- */
 
+/** Ensures support_messages table has image_url column automatically. */
+function chat_ensure_schema(): void
+{
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    if (!has_column('support_messages', 'image_url')) {
+        try {
+            db()->exec("ALTER TABLE `support_messages` ADD COLUMN `image_url` VARCHAR(500) NULL DEFAULT NULL AFTER `body`");
+        } catch (Throwable) {}
+    }
+}
+
 /** The message text from a request body: trimmed, control characters removed, length-checked. */
 function chat_text(array $b, bool $allowEmpty = false): string
 {
@@ -1243,6 +1256,7 @@ function chat_unread(int $userId, bool $admin): int
 /** Adds a message to a member's chat (opening the chat again if it was closed). */
 function chat_post(int $userId, bool $admin, string $text, ?string $imageUrl = null): array
 {
+    chat_ensure_schema();
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -2566,9 +2580,14 @@ try {
         /* ---------- Support chat: admin side ---------- */
         case 'admin_chats':
             require_admin();
+            chat_ensure_schema();
+            $hasImg = has_column('support_messages', 'image_url');
+            $lastExpr = $hasImg
+                ? "IF(m.body != '', LEFT(m.body, 140), IF(m.image_url IS NOT NULL AND m.image_url != '', '📷 Photo', ''))"
+                : "LEFT(m.body, 140)";
             $rows = db()->query("SELECT t.*, u.username, u.email, u.avatar_url, u.disabled_at,
                     (SELECT COUNT(*) FROM support_messages m WHERE m.user_id=t.user_id AND m.from_admin=0 AND m.id > t.admin_read_id) AS unread,
-                    (SELECT CONCAT(m.from_admin, ':', IF(m.body != '', LEFT(m.body, 140), IF(m.image_url IS NOT NULL AND m.image_url != '', '📷 Photo', ''))) FROM support_messages m WHERE m.user_id=t.user_id ORDER BY m.id DESC LIMIT 1) AS last
+                    (SELECT CONCAT(m.from_admin, ':', $lastExpr) FROM support_messages m WHERE m.user_id=t.user_id ORDER BY m.id DESC LIMIT 1) AS last
                 FROM support_threads t JOIN users u ON u.id=t.user_id
                 ORDER BY t.last_message_at DESC LIMIT 500")->fetchAll();
             respond(['chats' => array_map(fn($r) => [
