@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS support_messages (
   user_id    INT UNSIGNED NOT NULL,
   from_admin TINYINT(1)   NOT NULL DEFAULT 0,
   body       TEXT         NOT NULL,
+  image_url  VARCHAR(500) NULL DEFAULT NULL,
   created_at DATETIME     NOT NULL,
   KEY idx_messages_user (user_id, id),
   CONSTRAINT fk_messages_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE

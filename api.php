@@ -12,8 +12,10 @@ date_default_timezone_set('UTC');
 const ICON_DIR   = __DIR__ . '/uploads/icons';
 const SHOT_DIR   = __DIR__ . '/uploads/screenshots';
 const AVATAR_DIR = __DIR__ . '/uploads/avatars';
+const CHAT_DIR   = __DIR__ . '/uploads/chat';
 const IPA_DIR    = __DIR__ . '/uploads/ipa';
 const IPA_MAX_MB = 4096;
+const CHAT_IMAGE_MAX_MB = 10;
 // Admin login and database live in config.php (git-ignored). Copy config.example.php to create it.
 $config = is_file(__DIR__ . '/config.php') ? require __DIR__ . '/config.php' : [];
 define('ADMIN_USER', (string)($config['admin_user'] ?? ''));
@@ -1182,10 +1184,10 @@ function matches_filters(array $i, string $type, string $cat, string $q, string 
 /* ---------- Support chat (tables in sql/support_chat.sql) ---------- */
 
 /** The message text from a request body: trimmed, control characters removed, length-checked. */
-function chat_text(array $b): string
+function chat_text(array $b, bool $allowEmpty = false): string
 {
     $t = trim(preg_replace('/[^\P{C}\n\t]/u', '', str_replace("\r\n", "\n", (string)($b['body'] ?? ''))) ?? '');
-    if ($t === '') throw new ApiError('Type a message', 422);
+    if ($t === '' && !$allowEmpty) throw new ApiError('Type a message or attach an image', 422);
     if (mb_strlen($t) > CHAT_MAX_LEN) throw new ApiError('Messages can be up to ' . CHAT_MAX_LEN . ' characters', 422);
     return $t;
 }
@@ -1199,7 +1201,13 @@ function chat_thread(int $userId): ?array
 
 function chat_row(array $m): array
 {
-    return ['id' => (int)$m['id'], 'from' => $m['from_admin'] ? 'admin' : 'user', 'body' => $m['body'], 'at' => iso_date($m['created_at'])];
+    return [
+        'id' => (int)$m['id'],
+        'from' => $m['from_admin'] ? 'admin' : 'user',
+        'body' => $m['body'],
+        'image' => !empty($m['image_url']) ? $m['image_url'] : null,
+        'at' => iso_date($m['created_at'])
+    ];
 }
 
 /** Messages after id $after, oldest first. $after = 0: the latest 100 (the start of an open chat). */
@@ -1233,13 +1241,18 @@ function chat_unread(int $userId, bool $admin): int
 }
 
 /** Adds a message to a member's chat (opening the chat again if it was closed). */
-function chat_post(int $userId, bool $admin, string $text): array
+function chat_post(int $userId, bool $admin, string $text, ?string $imageUrl = null): array
 {
     $pdo = db();
     $pdo->beginTransaction();
     try {
-        $pdo->prepare('INSERT INTO support_messages (user_id, from_admin, body, created_at) VALUES (?, ?, ?, UTC_TIMESTAMP())')
-            ->execute([$userId, (int)$admin, $text]);
+        if (has_column('support_messages', 'image_url')) {
+            $pdo->prepare('INSERT INTO support_messages (user_id, from_admin, body, image_url, created_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP())')
+                ->execute([$userId, (int)$admin, $text, $imageUrl]);
+        } else {
+            $pdo->prepare('INSERT INTO support_messages (user_id, from_admin, body, created_at) VALUES (?, ?, ?, UTC_TIMESTAMP())')
+                ->execute([$userId, (int)$admin, $text]);
+        }
         $id = (int)$pdo->lastInsertId();
         // The sender has obviously read everything up to their own message.
         $col = $admin ? 'admin_read_id' : 'user_read_id';
@@ -2534,18 +2547,28 @@ try {
         case 'chat_send':
             require_post();
             $me = current_user() ?? throw new ApiError('Sign in to chat with support', 403);
-            $text = chat_text(body());
             $key = 'chat:' . $me['id'];
             rate_check($key, LIMIT_CHAT, 'You are sending messages too fast. Wait a few minutes.');
+
+            $b = !empty($_POST) ? $_POST : body();
+            $imageFile = $_FILES['image'] ?? null;
+            $imageUrl = null;
+            if ($imageFile && ($imageFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                $imageUrl = store_upload_image($imageFile, CHAT_DIR, CHAT_IMAGE_MAX_MB, 'Image');
+            } elseif (!empty($b['image_url']) && is_string($b['image_url'])) {
+                $imageUrl = trim($b['image_url']);
+            }
+
+            $text = chat_text($b, (bool)$imageUrl);
             rate_hit($key);
-            respond(['message' => chat_post($me['id'], false, $text)]);
+            respond(['message' => chat_post($me['id'], false, $text, $imageUrl)]);
 
         /* ---------- Support chat: admin side ---------- */
         case 'admin_chats':
             require_admin();
             $rows = db()->query("SELECT t.*, u.username, u.email, u.avatar_url, u.disabled_at,
                     (SELECT COUNT(*) FROM support_messages m WHERE m.user_id=t.user_id AND m.from_admin=0 AND m.id > t.admin_read_id) AS unread,
-                    (SELECT CONCAT(m.from_admin, ':', LEFT(m.body, 140)) FROM support_messages m WHERE m.user_id=t.user_id ORDER BY m.id DESC LIMIT 1) AS last
+                    (SELECT CONCAT(m.from_admin, ':', IF(m.body != '', LEFT(m.body, 140), IF(m.image_url IS NOT NULL AND m.image_url != '', '📷 Photo', ''))) FROM support_messages m WHERE m.user_id=t.user_id ORDER BY m.id DESC LIMIT 1) AS last
                 FROM support_threads t JOIN users u ON u.id=t.user_id
                 ORDER BY t.last_message_at DESC LIMIT 500")->fetchAll();
             respond(['chats' => array_map(fn($r) => [
@@ -2579,12 +2602,27 @@ try {
         case 'admin_chat_send':
             require_post();
             require_admin();
-            $b = body();
+            $b = !empty($_POST) ? $_POST : body();
             $uid = (int)($b['user_id'] ?? 0);
             $st = db()->prepare('SELECT 1 FROM users WHERE id=?');
             $st->execute([$uid]);
             if (!$st->fetchColumn()) throw new ApiError('User not found', 404);
-            respond(['message' => chat_post($uid, true, chat_text($b))]);
+
+            $imageFile = $_FILES['image'] ?? null;
+            $imageUrl = null;
+            if ($imageFile && ($imageFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                $imageUrl = store_upload_image($imageFile, CHAT_DIR, CHAT_IMAGE_MAX_MB, 'Image');
+            } elseif (!empty($b['image_url']) && is_string($b['image_url'])) {
+                $imageUrl = trim($b['image_url']);
+            }
+
+            $text = chat_text($b, (bool)$imageUrl);
+            respond(['message' => chat_post($uid, true, $text, $imageUrl)]);
+
+        case 'chat_upload_image':
+            require_post();
+            if (!current_user() && !is_admin()) throw new ApiError('Sign in to upload images', 403);
+            respond(['path' => store_upload_image($_FILES['image'] ?? null, CHAT_DIR, CHAT_IMAGE_MAX_MB, 'Image')]);
 
         // Mark a chat as resolved ('closed') or open again. A new message from either side reopens it.
         case 'admin_chat_status':

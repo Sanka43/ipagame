@@ -41,7 +41,10 @@ function send_mail(array $cfg, string $to, string $subject, string $text, string
     if (empty($cfg['host'])) {
         // Only a local dev server may fake sending; on a real host a missing config must fail loudly,
         // otherwise users would be told "code sent" while nothing leaves the server.
-        $local = PHP_SAPI === 'cli-server' || in_array($_SERVER['SERVER_NAME'] ?? '', ['localhost', '127.0.0.1', '::1'], true);
+        $server = $_SERVER['SERVER_NAME'] ?? '';
+        $local = PHP_SAPI === 'cli-server'
+            || in_array($server, ['localhost', '127.0.0.1', '::1'], true)
+            || preg_match('/^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)$/', $server);
         if (!$local) {
             error_log("mailer: no 'mail' block in config.php, email to $to not sent");
             return false;

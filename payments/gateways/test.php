@@ -8,7 +8,9 @@ return new class($cfg) implements Gateway {
     public function __construct(private array $cfg)
     {
         $host = preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? '');
-        if (PHP_SAPI !== 'cli' && !in_array($host, ['localhost', '127.0.0.1', '[::1]'], true)) throw new GatewayError('The test gateway only works on localhost');
+        $isLocal = in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]'], true)
+            || preg_match('/^(10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)$/', $host);
+        if (PHP_SAPI !== 'cli' && !$isLocal) throw new GatewayError('The test gateway only works on localhost or local network');
     }
 
     /** Signature the fake notification carries (test_pay.php and parseNotify share it). */

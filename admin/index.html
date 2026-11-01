@@ -8,7 +8,7 @@
   <link rel="icon" href="../assets/icons/favicon.ico" sizes="any">
   <link rel="icon" href="../assets/icons/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="../assets/style.css?v=20261013a">
+  <link rel="stylesheet" href="../assets/style.css?v=20261101a">
     <style>
       .mark-dot { position: relative; width: 14px; height: 14px; padding: 0; margin-right: 8px; vertical-align: -1px; border-radius: 50%;
         border: 2px solid var(--muted); background: transparent; opacity: .45; cursor: pointer; }
@@ -726,7 +726,7 @@
   <script>window.API_BASE = '../';</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="../assets/common.js?v=20261009b"></script>
-  <script src="../assets/chat.js?v=20260928e"></script>
+  <script src="../assets/chat.js?v=20261101a"></script>
   <script>
     const $ = s => document.querySelector(s);
     const form = $('#editForm');
@@ -2118,8 +2118,17 @@
     }
 
     $('#spForm').innerHTML = composerHTML('Reply');
-    const composer = chatComposer($('#spForm'), async text => {
-      const r = await api('admin_chat_send', { body: { user_id: sp.userId, body: text } });
+    const composer = chatComposer($('#spForm'), async (text, file) => {
+      let r;
+      if (file) {
+        const fd = new FormData();
+        fd.append('user_id', sp.userId);
+        if (text) fd.append('body', text);
+        fd.append('image', file);
+        r = await api('admin_chat_send', { form: fd });
+      } else {
+        r = await api('admin_chat_send', { body: { user_id: sp.userId, body: text } });
+      }
       addMessages([r.message]);
       sp.status = 'open';                               // a new message reopens a resolved chat
       $('#spStatus').textContent = 'Resolve';
