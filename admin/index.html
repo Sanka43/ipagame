@@ -83,6 +83,8 @@
       .ai-box-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
       .ai-spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: aiSpin .7s linear infinite; vertical-align: -2px; }
       @keyframes aiSpin { to { transform: rotate(360deg); } }
+      .page-size-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-left: auto; }
+      @media (max-width: 600px) { .page-size-wrap { margin-left: 0; width: 100%; justify-content: flex-end; } }
     </style>
 </head>
 <body>
@@ -187,9 +189,9 @@
 
       <div class="toolbar bulk-bar" id="bulkBar">
         <div class="bulk-bar-left">
-          <label class="check bulk-select-all" title="Select or deselect all visible games">
+          <label class="check bulk-select-all" title="Select or deselect visible games on this page">
             <input type="checkbox" id="selectAllGames">
-            <span>Select all</span>
+            <span>Select page</span>
           </label>
           <span class="muted bulk-count" id="selectedCount"></span>
         </div>
@@ -210,6 +212,15 @@
           </select>
           <button type="button" class="btn sm ghost" id="clearSelectionBtn">Clear</button>
         </div>
+        <div class="page-size-wrap">
+          <label for="pageSizeSelect" class="muted">Per page:</label>
+          <select class="input sm" id="pageSizeSelect" aria-label="Items per page" style="width:auto;height:32px;padding:0 8px;border-radius:8px;">
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="all">All</option>
+          </select>
+        </div>
       </div>
 
       <div class="admin-list" id="list">
@@ -219,6 +230,7 @@
         <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
         <div class="row skel-card" aria-hidden="true"><div class="icon sm wait"></div><div class="row-info"><span class="skel skel-line" style="width:45%;height:14px"></span><span class="skel skel-line" style="width:70%"></span></div></div>
       </div>
+      <nav class="pager" id="pager" aria-label="Pagination" style="margin:24px 0 12px;"></nav>
       </section>
 
       <!-- Store users -->
@@ -732,6 +744,15 @@
     const form = $('#editForm');
     const dialog = $('#editor');
     let items = [];
+    let currentPage = 1;
+    let pageSize = (() => {
+      const saved = localStorage.getItem('admin_page_size');
+      if (saved === 'all') return 'all';
+      const n = parseInt(saved, 10);
+      return [50, 100, 200].includes(n) ? n : 50;
+    })();
+    let currentVisibleGames = [];
+    let currentPageItems = [];
     const selectedIds = new Set();
 
     /* ---------- Auth ---------- */
@@ -745,7 +766,6 @@
       $('#loginView').hidden = true;
       $('#dashView').hidden = false;
       showPane(PANES.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'games');
-      if (!usersLoaded && location.hash !== '#users') refreshUsers();
       pollChats();
       await refresh();
     }
@@ -837,6 +857,45 @@
       });
     }
 
+    function renderPager(page, pages) {
+      const pagerEl = $('#pager');
+      if (!pagerEl) return;
+      if (pages <= 1) {
+        pagerEl.innerHTML = '';
+        return;
+      }
+      const nums = new Set([1, pages]);
+      for (let n = page - 2; n <= page + 2; n++) {
+        if (n > 1 && n < pages) nums.add(n);
+      }
+      const sorted = [...nums].sort((a, b) => a - b);
+      const btn = (p, label, extra = '') => `<button type="button" data-page="${p}" ${extra}>${label}</button>`;
+
+      let html = '';
+      if (page > 1) {
+        html += btn(1, '&laquo;', 'title="First page" aria-label="First page"');
+        html += btn(page - 1, '&lsaquo;', 'title="Previous page" aria-label="Previous page"');
+      } else {
+        html += `<button type="button" disabled title="First page">&laquo;</button>`;
+        html += `<button type="button" disabled title="Previous page">&lsaquo;</button>`;
+      }
+
+      sorted.forEach((n, i) => {
+        if (i && n - sorted[i - 1] > 1) html += '<span class="gap">&hellip;</span>';
+        html += btn(n, n, n === page ? 'aria-current="page"' : `aria-label="Page ${n}"`);
+      });
+
+      if (page < pages) {
+        html += btn(page + 1, '&rsaquo;', 'title="Next page" aria-label="Next page"');
+        html += btn(pages, '&raquo;', 'title="Last page" aria-label="Last page"');
+      } else {
+        html += `<button type="button" disabled title="Next page">&rsaquo;</button>`;
+        html += `<button type="button" disabled title="Last page">&raquo;</button>`;
+      }
+
+      pagerEl.innerHTML = html;
+    }
+
     function render() {
       const count = f => items.filter(f).length;
       $('#stats').innerHTML = [
@@ -853,8 +912,27 @@
       if (resetBtn) resetBtn.style.display = hasFilter ? '' : 'none';
 
       const list = getVisibleGames();
-      $('#gCount').textContent = list.length === items.length ? '' : `${list.length} of ${items.length}`;
-      $('#list').innerHTML = list.length ? list.map(it => {
+      currentVisibleGames = list;
+
+      const effPageSize = pageSize === 'all' ? (list.length || 1) : pageSize;
+      const totalPages = Math.max(1, Math.ceil(list.length / effPageSize));
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      const startIdx = (currentPage - 1) * effPageSize;
+      const endIdx = Math.min(startIdx + effPageSize, list.length);
+      const pageItems = list.slice(startIdx, endIdx);
+      currentPageItems = pageItems;
+
+      if (list.length === 0) {
+        $('#gCount').textContent = items.length ? `0 of ${items.length}` : '';
+      } else if (pageSize === 'all' || list.length <= effPageSize) {
+        $('#gCount').textContent = list.length === items.length ? `${list.length} total` : `${list.length} of ${items.length}`;
+      } else {
+        $('#gCount').textContent = `${startIdx + 1}–${endIdx} of ${list.length}${list.length !== items.length ? ` (${items.length} total)` : ''}`;
+      }
+
+      $('#list').innerHTML = pageItems.length ? pageItems.map(it => {
         const n = it.versions_count || 0;
         const meta = [it.type === 'app' ? 'App' : 'Game', it.ipa ? 'IPA' : it.download_url && 'App Store', catLabel(it.category), it.latest_version && 'v' + String(it.latest_version).replace(/^v/i, ''), `${n} version${n === 1 ? '' : 's'}`]
           .filter(Boolean).join(' · ');
@@ -876,16 +954,23 @@
           </div>
         </div>`;
       }).join('') : `<p class="empty">${items.length ? 'No matches.' : 'No games yet. Tap “Add” to create one.'}</p>`;
-      updateBulkUI(list);
+
+      renderPager(currentPage, totalPages);
+      updateBulkUI(pageItems);
     }
 
-    $('#q').addEventListener('input', render);
-    $('#gType').addEventListener('change', render);
-    $('#gStatus').addEventListener('change', render);
-    $('#gAccess').addEventListener('change', render);
-    $('#gMark').addEventListener('change', render);
-    $('#gSource').addEventListener('change', render);
-    $('#gCat').addEventListener('change', render);
+    function onFilterChange() {
+      currentPage = 1;
+      render();
+    }
+
+    $('#q').addEventListener('input', onFilterChange);
+    $('#gType').addEventListener('change', onFilterChange);
+    $('#gStatus').addEventListener('change', onFilterChange);
+    $('#gAccess').addEventListener('change', onFilterChange);
+    $('#gMark').addEventListener('change', onFilterChange);
+    $('#gSource').addEventListener('change', onFilterChange);
+    $('#gCat').addEventListener('change', onFilterChange);
     $('#resetFiltersBtn').addEventListener('click', () => {
       $('#q').value = '';
       $('#gType').value = '';
@@ -894,7 +979,30 @@
       $('#gMark').value = '';
       $('#gSource').value = '';
       $('#gCat').value = '';
+      currentPage = 1;
       render();
+    });
+
+    const psSelect = $('#pageSizeSelect');
+    if (psSelect) {
+      psSelect.value = String(pageSize);
+      psSelect.addEventListener('change', e => {
+        const val = e.target.value;
+        pageSize = val === 'all' ? 'all' : parseInt(val, 10);
+        localStorage.setItem('admin_page_size', val);
+        currentPage = 1;
+        render();
+      });
+    }
+
+    $('#pager').addEventListener('click', e => {
+      const b = e.target.closest('button[data-page]');
+      if (!b || b.disabled) return;
+      const p = parseInt(b.dataset.page, 10);
+      if (!p || p === currentPage) return;
+      currentPage = p;
+      render();
+      $('#list').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     $('#list').addEventListener('click', async e => {
@@ -943,7 +1051,7 @@
 
     /* ---------- Bulk selection & actions ---------- */
     function updateBulkUI(visibleList) {
-      const vList = visibleList || getVisibleGames();
+      const vList = visibleList || currentPageItems || [];
       const selectAll = $('#selectAllGames');
       const countEl = $('#selectedCount');
       const controls = $('#bulkControls');
@@ -973,7 +1081,7 @@
     }
 
     $('#selectAllGames').addEventListener('change', e => {
-      const visible = getVisibleGames();
+      const visible = currentPageItems || [];
       if (e.target.checked) {
         visible.forEach(i => selectedIds.add(i.id));
       } else {

@@ -606,16 +606,29 @@ function group_by_game(string $sql): array
 function fetch_admin_rows(): array
 {
     $pub = (has_publish_at() ? ' g.publish_at,' : '') . (has_column('games', 'admin_mark') ? ' g.admin_mark,' : '');
-    $rows = db()->query('SELECT g.id, g.slug, g.type, g.name, g.developer, g.category, g.icon, g.latest_version, g.status,' . $pub . '
-                                (SELECT COUNT(*) FROM game_versions v WHERE v.game_id = g.id) AS versions_count,
-                                (SELECT v.download_url FROM game_versions v WHERE v.game_id = g.id ORDER BY v.id LIMIT 1) AS download_url,
-                                EXISTS(SELECT 1 FROM game_versions v WHERE v.game_id = g.id
-                                       AND v.download_url NOT LIKE \'%apps.apple.com%\') AS ipa
-                         FROM games g ORDER BY g.updated_at DESC, g.id DESC')->fetchAll();
-    // ipa: some version links off the App Store (an IPA file), same test as save_item's $offStore.
-    return array_map(fn($r) => ['id' => (int)$r['id'], 'access' => isset(premium_ids()[(int)$r['id']]) ? 'premium' : 'free', 'versions_count' => (int)$r['versions_count'], 'ipa' => (bool)$r['ipa'],
-                                'download_url' => (string)$r['download_url'],
-                                'publish_at' => iso_date($r['publish_at'] ?? null), 'mark' => (string)($r['admin_mark'] ?? '')] + $r, $rows);
+    $rows = db()->query("SELECT g.id, g.slug, g.type, g.name, g.developer, g.category, g.icon, g.latest_version, g.status,$pub 0
+                         FROM games g ORDER BY g.updated_at DESC, g.id DESC")->fetchAll();
+
+    // Efficiently aggregate versions in 2 bulk queries instead of 3 subqueries per row (saves ~3,600 subqueries)
+    $stats = db()->query('SELECT game_id, COUNT(*) AS versions_count, MAX(download_url NOT LIKE \'%apps.apple.com%\') AS ipa FROM game_versions GROUP BY game_id')
+                 ->fetchAll(PDO::FETCH_GROUP | PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+    $firstDl = db()->query('SELECT v1.game_id, v1.download_url FROM game_versions v1 INNER JOIN (SELECT MIN(id) AS mid FROM game_versions GROUP BY game_id) v2 ON v1.id = v2.mid')
+                  ->fetchAll(PDO::FETCH_KEY_PAIR);
+    $prem = premium_ids();
+
+    return array_map(function($r) use ($stats, $firstDl, $prem) {
+        $id = (int)$r['id'];
+        $st = $stats[$id] ?? null;
+        return [
+            'id' => $id,
+            'access' => isset($prem[$id]) ? 'premium' : 'free',
+            'versions_count' => (int)($st['versions_count'] ?? 0),
+            'ipa' => (bool)($st['ipa'] ?? false),
+            'download_url' => (string)($firstDl[$id] ?? ''),
+            'publish_at' => iso_date($r['publish_at'] ?? null),
+            'mark' => (string)($r['admin_mark'] ?? '')
+        ] + $r;
+    }, $rows);
 }
 
 /** All items, newest first. $full adds descriptions, versions and screenshots. */
