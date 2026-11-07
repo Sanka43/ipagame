@@ -222,17 +222,22 @@ function gravatar_url(string $email): string
     return 'https://gravatar.com/avatar/' . hash('sha256', strtolower(trim($email))) . '?s=160&d=404';
 }
 
-// The store is members-only: browsing needs a logged-in user (or the admin, for the panel).
+function is_guest(): bool
+{
+    return !empty($_SESSION['is_guest']);
+}
+
+// The store is members-only: browsing needs a logged-in user, admin, or guest session.
 function require_member(): void
 {
-    if (!is_admin() && !current_user()) throw new ApiError('Login required', 401);
+    if (!is_admin() && !current_user() && !is_guest()) throw new ApiError('Login required', 401);
 }
 
 function login_user(int $id): void
 {
     session_regenerate_id(true);
     $_SESSION['user_id'] = $id;
-    unset($_SESSION['pending_user_id']);
+    unset($_SESSION['pending_user_id'], $_SESSION['is_guest']);
     db()->prepare('UPDATE users SET last_login_at=UTC_TIMESTAMP() WHERE id=?')->execute([$id]);
     remember_device($id);
 }
@@ -1850,8 +1855,13 @@ try {
         case 'me':
             $pending = pending_user();
             $me = current_user();
-            respond(['admin' => is_admin(), 'user' => $me, 'vip' => $me ? is_vip($me['id']) : false, 'google_client_id' => GOOGLE_CLIENT_ID,
+            respond(['admin' => is_admin(), 'user' => $me, 'guest' => is_guest() && !$me, 'vip' => $me ? is_vip($me['id']) : false, 'google_client_id' => GOOGLE_CLIENT_ID,
                      'pending' => $pending ? ['email' => $pending['email'], 'resend_in' => resend_wait($pending)] : null]);
+
+        case 'guest_login':
+            require_post();
+            $_SESSION['is_guest'] = true;
+            respond(['ok' => true, 'guest' => true]);
 
         case 'register':
             require_post();
@@ -2062,7 +2072,7 @@ try {
         case 'user_logout':
             require_post();
             forget_device();
-            unset($_SESSION['user_id'], $_SESSION['pending_user_id']);
+            unset($_SESSION['user_id'], $_SESSION['pending_user_id'], $_SESSION['is_guest']);
             session_regenerate_id(true);
             respond(['ok' => true]);
 

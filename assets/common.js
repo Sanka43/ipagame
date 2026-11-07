@@ -29,7 +29,7 @@ function enforceAuth() {
 
   if (authState !== '1') {
     api('me').then(r => {
-      if (r && r.user) {
+      if (r && (r.user || r.guest)) {
         try { localStorage.setItem('me_active', '1'); } catch {}
         document.documentElement.classList.remove('auth-pending');
       } else {
@@ -291,7 +291,16 @@ function mountAccountButton() {
   // Last known user from this tab, so the picture shows at once instead of popping in.
   try { const u = JSON.parse(sessionStorage.getItem('me') || 'null'); if (u) fill(u); } catch {}
   api('me').then(r => {
-    if (!r.user) {                                // signed out elsewhere: drop the remembered picture
+    if (!r.user) {
+      if (r.guest) {
+        btn.innerHTML = '<span class="avatar-initial" style="background:rgba(255,255,255,.08);color:var(--muted);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>';
+        btn.title = 'Guest (Sign In)';
+        try {
+          sessionStorage.removeItem('me');
+          localStorage.setItem('me_active', '1');
+        } catch {}
+        return;
+      }
       btn.innerHTML = '';
       try {
         sessionStorage.removeItem('me');

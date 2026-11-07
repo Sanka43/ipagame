@@ -29,6 +29,10 @@
 
       <!-- Sign in -->
       <section class="auth-view" id="loginView" hidden>
+        <div class="guest-notice" id="guestNotice" hidden>
+          <span>Browsing as <strong>Guest</strong></span>
+          <a href="./" id="backToStore">Back to Store &rarr;</a>
+        </div>
         <header class="auth-head">
           <div class="auth-logo"><img src="assets/icons/logo-mark.png" alt=""></div>
           <h1>Sign In</h1>
@@ -52,6 +56,12 @@
         <div class="google-wrap" hidden>
           <div class="or-line"><span>or</span></div>
           <div class="gbtn"></div>
+        </div>
+        <div class="guest-wrap" style="margin-top:16px">
+          <button type="button" class="btn-guest" id="guestBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Continue as Guest</span>
+          </button>
         </div>
         <p class="auth-forgot"><button type="button" class="link-btn" data-mode="forgot">Forgot password?</button></p>
         <p class="auth-switch">New to Game Store? <button type="button" class="link-btn" data-mode="register">Create Account</button></p>
@@ -471,6 +481,22 @@
       return true;
     }
 
+    $('#guestBtn')?.addEventListener('click', async () => {
+      const btn = $('#guestBtn');
+      btn.disabled = true;
+      try {
+        await api('guest_login', { body: {} });
+        try {
+          localStorage.setItem('me_active', '1');
+          sessionStorage.setItem('is_guest', '1');
+        } catch {}
+        goBack();
+      } catch (err) {
+        $('#loginError').textContent = err.message || 'Could not start guest session';
+        btn.disabled = false;
+      }
+    });
+
     $('#loginForm').addEventListener('submit', e => submit(e, $('#loginError'), async () => {
       const login = $('#loginId').value.trim(), password = $('#loginPass').value;
       if (!login || !password) throw new Error('Enter your username and password.');
@@ -791,8 +817,16 @@
           try { localStorage.setItem('me_active', '0'); } catch {}
           showVerify(r.pending);
         } else {
-          try { localStorage.setItem('me_active', '0'); } catch {}
+          const isGuest = Boolean(r && r.guest);
+          try { localStorage.setItem('me_active', isGuest ? '1' : '0'); } catch {}
           setView(new URLSearchParams(location.search).has('register') ? 'register' : 'login');
+          if (isGuest) {
+            $('#guestNotice')?.removeAttribute('hidden');
+            if (next) {
+              const b = $('#backToStore');
+              if (b) b.href = next;
+            }
+          }
         }
       })
       .catch(() => {
