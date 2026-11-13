@@ -165,7 +165,13 @@ function push_sweep(): int
 {
     try {
         if (!push_ready()) return 0;
-        $ids = db()->query("SELECT id FROM games WHERE status='published' AND pushed_at IS NULL ORDER BY id LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
+        $hasNotify = function_exists('has_column') ? has_column('games', 'notify_email') : true;
+        if ($hasNotify) {
+            db()->query("UPDATE games SET pushed_at = UTC_TIMESTAMP() WHERE status='published' AND notify_email = 0 AND pushed_at IS NULL");
+            $ids = db()->query("SELECT id FROM games WHERE status='published' AND notify_email = 1 AND pushed_at IS NULL ORDER BY id LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            $ids = db()->query("SELECT id FROM games WHERE status='published' AND pushed_at IS NULL ORDER BY id LIMIT 5")->fetchAll(PDO::FETCH_COLUMN);
+        }
         $claim = db()->prepare('UPDATE games SET pushed_at=UTC_TIMESTAMP(), updated_at=updated_at WHERE id=? AND pushed_at IS NULL');
         $n = 0;
         foreach ($ids as $id) {

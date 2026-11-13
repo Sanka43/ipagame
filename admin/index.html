@@ -574,7 +574,7 @@
         <div class="checks">
           <label class="check"><input type="checkbox" name="popular"> Popular</label>
           <label class="check"><input type="checkbox" name="editors_choice"> Editors' choice</label>
-          <label class="check"><input type="checkbox" name="notify_email"> Email members when this goes live <span class="muted" id="notifiedNote" style="font-size:13px"></span></label>
+          <label class="check"><input type="checkbox" name="notify_email"> Notify members (Email & Push) when this goes live <span class="muted" id="notifiedNote" style="font-size:13px"></span></label>
         </div>
 
         <div class="grid2">
@@ -1493,8 +1493,8 @@
       syncPublishAt();
       f.popular.checked = !!it?.featured?.popular;
       f.editors_choice.checked = !!it?.featured?.editors_choice;
-      f.notify_email.checked = it ? !!it.notify_email : true;      // new items: on by default
-      $('#notifiedNote').textContent = it?.notified_at ? '(already emailed)' : '';
+      f.notify_email.checked = Boolean(it?.notify_email);      // default off (unchecked)
+      $('#notifiedNote').textContent = it?.notified_at ? '(already notified)' : '';
       f.rating_value.value = it?.rating?.value || '';
       f.rating_count.value = it?.rating?.count || '';
       shots.screenshots = [...(it?.screenshots ?? [])];
