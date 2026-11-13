@@ -614,14 +614,16 @@ function fetch_admin_rows(): array
     $rows = db()->query("SELECT g.id, g.slug, g.type, g.name, g.developer, g.category, g.icon, g.latest_version, g.status,$pub 0
                          FROM games g ORDER BY g.updated_at DESC, g.id DESC")->fetchAll();
 
-    // Efficiently aggregate versions in 2 bulk queries instead of 3 subqueries per row (saves ~3,600 subqueries)
+    // Efficiently aggregate versions in bulk queries instead of subqueries per row
     $stats = db()->query('SELECT game_id, COUNT(*) AS versions_count, MAX(download_url NOT LIKE \'%apps.apple.com%\') AS ipa FROM game_versions GROUP BY game_id')
                  ->fetchAll(PDO::FETCH_GROUP | PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
     $firstDl = db()->query('SELECT v1.game_id, v1.download_url FROM game_versions v1 INNER JOIN (SELECT MIN(id) AS mid FROM game_versions GROUP BY game_id) v2 ON v1.id = v2.mid')
                   ->fetchAll(PDO::FETCH_KEY_PAIR);
+    $allDl = db()->query('SELECT game_id, GROUP_CONCAT(DISTINCT download_url SEPARATOR "\n") AS all_urls FROM game_versions GROUP BY game_id')
+                 ->fetchAll(PDO::FETCH_KEY_PAIR);
     $prem = premium_ids();
 
-    return array_map(function($r) use ($stats, $firstDl, $prem) {
+    return array_map(function($r) use ($stats, $firstDl, $allDl, $prem) {
         $id = (int)$r['id'];
         $st = $stats[$id] ?? null;
         return [
@@ -630,6 +632,7 @@ function fetch_admin_rows(): array
             'versions_count' => (int)($st['versions_count'] ?? 0),
             'ipa' => (bool)($st['ipa'] ?? false),
             'download_url' => (string)($firstDl[$id] ?? ''),
+            'download_urls' => (string)($allDl[$id] ?? ($firstDl[$id] ?? '')),
             'publish_at' => iso_date($r['publish_at'] ?? null),
             'mark' => (string)($r['admin_mark'] ?? '')
         ] + $r;

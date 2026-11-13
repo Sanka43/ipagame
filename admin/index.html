@@ -180,6 +180,9 @@
           <option value="store">App Store</option>
           <option value="nolink">No download link</option>
         </select>
+        <select class="input u-filter" id="gHost" aria-label="Filter by URL domain">
+          <option value="">All URL domains</option>
+        </select>
         <select class="input u-filter" id="gCat" aria-label="Filter by category">
           <option value="">All categories</option>
         </select>
@@ -796,6 +799,88 @@
       showLogin();
     });
 
+    function extractDomain(url) {
+      if (!url) return '';
+      url = String(url).trim();
+      if (!url) return '';
+      if (url.startsWith('/') || url.startsWith('uploads/')) return 'Local upload';
+      try {
+        const u = new URL(url.startsWith('http') ? url : 'https://' + url);
+        return u.hostname.replace(/^www\./i, '');
+      } catch {
+        return '';
+      }
+    }
+
+    function updateHostFilter(items) {
+      const hostSelect = $('#gHost');
+      if (!hostSelect) return;
+      const current = hostSelect.value;
+      const hostCounts = {};
+      let noLinkCount = 0;
+
+      for (const it of items) {
+        const raw = (it.download_urls || it.download_url || '').trim();
+        if (!raw) {
+          noLinkCount++;
+          continue;
+        }
+        const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if (!lines.length) {
+          noLinkCount++;
+          continue;
+        }
+        const itemHosts = new Set();
+        for (const u of lines) {
+          const d = extractDomain(u);
+          if (d) itemHosts.add(d);
+        }
+        if (!itemHosts.size) {
+          noLinkCount++;
+        } else {
+          for (const h of itemHosts) {
+            hostCounts[h] = (hostCounts[h] || 0) + 1;
+          }
+        }
+      }
+
+      const priority = ['dl.iosvizor.net', 'github.com', 'apps.apple.com', 'Local upload'];
+      const allDetected = Object.keys(hostCounts);
+
+      allDetected.sort((a, b) => {
+        const pa = priority.indexOf(a);
+        const pb = priority.indexOf(b);
+        if (pa !== -1 && pb !== -1) return pa - pb;
+        if (pa !== -1) return -1;
+        if (pb !== -1) return 1;
+        return (hostCounts[b] || 0) - (hostCounts[a] || 0);
+      });
+
+      const options = ['<option value="">All URL domains</option>'];
+      // Ensure target domains dl.iosvizor.net and github.com always exist in the list
+      for (const p of ['dl.iosvizor.net', 'github.com']) {
+        if (!allDetected.includes(p)) {
+          options.push(`<option value="${esc(p)}">${esc(p)} (0)</option>`);
+        }
+      }
+
+      for (const h of allDetected) {
+        const label = h === 'Local upload' ? 'Local uploads (/uploads/)' : h;
+        options.push(`<option value="${esc(h)}">${esc(label)} (${hostCounts[h]})</option>`);
+      }
+
+      if (noLinkCount > 0) {
+        options.push(`<option value="nolink">No download link (${noLinkCount})</option>`);
+      }
+
+      hostSelect.innerHTML = options.join('');
+      if (current && (allDetected.includes(current) || current === 'dl.iosvizor.net' || current === 'github.com' || current === 'nolink')) {
+        hostSelect.value = current;
+      } else {
+        hostSelect.value = '';
+      }
+    }
+
     /* ---------- List ---------- */
     async function refresh() {
       try {
@@ -809,6 +894,10 @@
         $('#gCat').innerHTML = '<option value="">All categories</option>' +
           used.map(c => `<option value="${esc(c || '-')}">${esc(c ? catLabel(c) : 'No category')}</option>`).join('');
         $('#gCat').value = used.includes(pick === '-' ? '' : pick) ? pick : '';
+
+        // Domain / URL filter: dynamically updated with counts
+        updateHostFilter(items);
+
         render();
       } catch (err) { handleError(err); }
     }
@@ -822,10 +911,12 @@
       const access = $('#gAccess')?.value || '';
       const mark = $('#gMark')?.value || '';
       const source = $('#gSource')?.value || '';
+      const host = $('#gHost')?.value || '';
       const cat = $('#gCat')?.value || '';
 
       return items.filter(i => {
-        if (q && ![i.name, i.developer, i.category].join(' ').toLowerCase().includes(q)) return false;
+        const dlUrls = (i.download_urls || i.download_url || '');
+        if (q && ![i.name, i.developer, i.category, dlUrls].join(' ').toLowerCase().includes(q)) return false;
         if (type && i.type !== type) return false;
         if (status) {
           if (status === 'published') {
@@ -851,6 +942,16 @@
           if (source === 'ipa' && !i.ipa) return false;
           if (source === 'store' && (i.ipa || !i.download_url)) return false;
           if (source === 'nolink' && !!i.download_url) return false;
+        }
+        if (host) {
+          const raw = dlUrls.trim();
+          if (host === 'nolink') {
+            if (raw !== '') return false;
+          } else if (host === 'Local upload') {
+            if (!raw.includes('/uploads/') && !raw.includes('uploads/')) return false;
+          } else {
+            if (!raw.toLowerCase().includes(host.toLowerCase())) return false;
+          }
         }
         if (cat && (i.category || '-') !== cat) return false;
         return true;
@@ -907,7 +1008,7 @@
         ['Scheduled', count(isScheduled)],
       ].map(([k, n]) => `<div class="card"><div class="n">${n}</div><div class="muted" style="font-size:13px">${k}</div></div>`).join('');
 
-      const hasFilter = Boolean($('#q').value.trim() || $('#gType')?.value || $('#gStatus')?.value || $('#gAccess')?.value || $('#gMark')?.value || $('#gSource')?.value || $('#gCat')?.value);
+      const hasFilter = Boolean($('#q').value.trim() || $('#gType')?.value || $('#gStatus')?.value || $('#gAccess')?.value || $('#gMark')?.value || $('#gSource')?.value || $('#gHost')?.value || $('#gCat')?.value);
       const resetBtn = $('#resetFiltersBtn');
       if (resetBtn) resetBtn.style.display = hasFilter ? '' : 'none';
 
@@ -970,6 +1071,7 @@
     $('#gAccess').addEventListener('change', onFilterChange);
     $('#gMark').addEventListener('change', onFilterChange);
     $('#gSource').addEventListener('change', onFilterChange);
+    $('#gHost').addEventListener('change', onFilterChange);
     $('#gCat').addEventListener('change', onFilterChange);
     $('#resetFiltersBtn').addEventListener('click', () => {
       $('#q').value = '';
@@ -978,6 +1080,7 @@
       $('#gAccess').value = '';
       $('#gMark').value = '';
       $('#gSource').value = '';
+      $('#gHost').value = '';
       $('#gCat').value = '';
       currentPage = 1;
       render();
